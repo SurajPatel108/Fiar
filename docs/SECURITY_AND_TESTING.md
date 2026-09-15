@@ -194,6 +194,10 @@ Phases 2 through 4 verify tenant-scoped action and approval APIs, default denial
 - A stale approval after policy change.
 - An unknown provider timeout that must not auto-retry without reconciliation.
 
+## Phase 5 client verification
+
+The Phase 5 SDK and dashboard remain untrusted clients. SDK tests verify exact request serialization, bound approval fields, and typed failure handling. Dashboard verification includes strict typechecking and a production build; its local manager credential exists only in page memory and all authorization remains at the gateway. Browser automation and production session-security testing remain deferred.
+
 ## Non-goals for testing the MVP
 
 - Live production provider calls.

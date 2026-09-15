@@ -1,0 +1,3 @@
+node_modules/
+apps/dashboard/dist/
+.DS_Store

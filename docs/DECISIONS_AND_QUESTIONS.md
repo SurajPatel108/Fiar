@@ -104,7 +104,7 @@ Tradeoff:
 2. Manager approval atomically moves an action from `awaiting_approval` to `queued`; manager rejection moves it to `denied`.
 3. Expired, policy-stale, or requester-suspended approvals are durably resolved as `expired` on manager reads or decision attempts.
 4. Approval requests use the displayed request hash and policy version ID as optimistic exact-binding checks.
-5. The dashboard is deferred because the repository does not yet contain a frontend toolchain.
+5. Phase 5 adds a local-only Vite/React dashboard; production authentication and managed browser sessions remain deferred.
 
 ## Phase 4 decisions
 

@@ -178,7 +178,7 @@ Verification:
 
 Goal: require exact manager approval for threshold actions and invalidate stale approvals.
 
-Status: complete (backend API); dashboard deferred.
+Status: complete (backend API); the manager dashboard was delivered in Phase 5.
 
 Tasks:
 
@@ -231,7 +231,7 @@ Verification:
 
 Dashboard status:
 
-- Deferred to the existing dashboard phase because this repository has no React application or frontend build configuration.
+- Delivered in Phase 5 as a client of these unchanged manager-only APIs.
 
 ## Phase 4: Worker, outbox, and provider reconciliation
 
@@ -308,12 +308,14 @@ Limitations:
 
 Goal: expose a usable client library and dashboard without weakening the server-side boundary.
 
+Status: complete for the typed HTTP SDK and local-development manager dashboard.
+
 Tasks:
 
-1. Add the TypeScript SDK client and polling helpers.
+1. Add the TypeScript SDK client for actions and approvals.
 2. Wire the dashboard to the gateway APIs.
 3. Display actionable status, reasons, and policy versions.
-4. Keep all credentials server-side or in authenticated dashboard sessions only.
+4. Keep the local dashboard credential in memory only and preserve server-derived authorization.
 
 Prerequisites:
 
@@ -325,24 +327,53 @@ Files to create or change:
 - packages/sdk/src/index.ts
 - packages/sdk/src/client.ts
 - packages/sdk/src/types.ts
-- packages/sdk/src/actions.ts
-- packages/sdk/src/polling.ts
 - packages/sdk/test/sdk.test.ts
+- packages/sdk/README.md
+- apps/dashboard/index.html
+- apps/dashboard/vite.config.ts
+- apps/dashboard/tsconfig.json
+- apps/dashboard/src/main.tsx
+- apps/dashboard/src/App.tsx
+- apps/dashboard/src/api.ts
+- apps/dashboard/src/styles.css
+- apps/dashboard/README.md
 
 Expected behavior:
 
-- The SDK submits a request and polls for the resulting state.
-- The dashboard can show pending, completed, and expired work.
+- The SDK submits and retrieves actions, lists and retrieves approvals, and makes exactly bound decisions.
+- The dashboard shows pending approvals and exact approval details, and requires confirmation for decisions.
+- Neither client evaluates policy or accesses worker/provider controls.
 
 Acceptance criteria:
 
 - SDK requests serialize exactly to the gateway schema.
 - The dashboard reads only tenant-visible records.
+- Every dashboard decision includes the detail response's exact request hash and policy version.
+- Local dashboard credentials are not persisted in browser storage or source code.
 
 Verification steps:
 
 - Run SDK request serialization tests.
-- Open the dashboard against seeded data and confirm the lists render.
+- Run the dashboard strict typecheck and production build.
+- Open the dashboard against seeded data and confirm the pending list, detail, confirmation, decision, and refresh flow.
+
+Completed deliverables:
+
+- Transport-only `FiarClient` with typed action, approval, pagination, decision, and error contracts.
+- Caller-supplied credential headers and exact-binding approve/reject convenience methods.
+- Five mocked-transport SDK tests covering serialization, URLs, pagination, bindings, API failures, and transport failures.
+- Responsive Vite/React manager dashboard with a pending queue, safe detail view, confirmation dialog, and explicit success/conflict/error states.
+- In-memory local credential entry and same-origin development proxy; no gateway authorization or execution routes were added.
+- Dashboard strict TypeScript check, production build, local startup guide, and manual demo flow.
+
+Verification:
+
+- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 35 Phase 2/3 integration tests, 13 Phase 4 worker tests, 5 SDK tests, and the dashboard typecheck/build.
+
+Limitations:
+
+- The dashboard credential entry is only for local development; production authentication and managed browser sessions remain Phase 6 work.
+- SDK polling helpers, component/browser automation, dashboard deployment packaging, broader workflows, and a production provider remain deferred.
 
 ## Phase 6: Production hardening
 

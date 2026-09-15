@@ -1,6 +1,6 @@
 # File Map
 
-This is the MVP file structure. Phases 1 through 4 exist for the gateway and deterministic worker; the dashboard, SDK, and production provider remain proposed.
+This is the MVP file structure. Phases 1 through 5 exist for the gateway, deterministic worker, SDK, and local manager dashboard. Production authentication, provider integration, deployment packaging, and hardening remain proposed.
 
 ## Proposed tree
 
@@ -45,29 +45,23 @@ apps/
       reconciliation.test.ts
       idempotency.test.ts
   dashboard/
+    README.md
+    index.html
+    tsconfig.json
+    vite.config.ts
     src/
       main.tsx
       App.tsx
       api.ts
-      routes/
-        PendingApprovals.tsx
-        ApprovalDetail.tsx
-        CompletedActions.tsx
-        ExpiredApprovals.tsx
-      components/
-        ActionTable.tsx
-        ApprovalPanel.tsx
-        StatusBadge.tsx
-    test/
-      dashboard.test.tsx
+      styles.css
 packages/
   sdk/
+    README.md
+    package.json
     src/
       index.ts
       client.ts
       types.ts
-      actions.ts
-      polling.ts
     test/
       sdk.test.ts
   shared/
@@ -137,23 +131,17 @@ infra/
 | apps/worker/test/worker.test.ts | Worker integration tests | Idempotent dispatch and crash recovery | worker, mock connector | Phase 4 |
 | apps/worker/test/reconciliation.test.ts | Reconciliation tests | Ambiguous provider response handling | worker | Phase 4 |
 | apps/worker/test/idempotency.test.ts | Idempotency tests | No duplicate provider side effects | worker, connector | Phase 4 |
+| apps/dashboard/README.md | Dashboard guide | Local startup and manual review flow | gateway, worker | Phase 5 |
+| apps/dashboard/vite.config.ts | Dashboard build/dev config | Vite root, build, local gateway proxy | Vite | Phase 5 |
 | apps/dashboard/src/main.tsx | Dashboard bootstrap | Mount React app | React build setup | Phase 5 |
-| apps/dashboard/src/App.tsx | Dashboard shell | Navigation and page layout | routes, api | Phase 5 |
-| apps/dashboard/src/api.ts | Dashboard API client | Authenticated calls to gateway | gateway endpoints | Phase 5 |
-| apps/dashboard/src/routes/PendingApprovals.tsx | Pending approvals list | Show actionable work queue | api | Phase 5 |
-| apps/dashboard/src/routes/ApprovalDetail.tsx | Approval detail page | Display exact immutable request | api | Phase 5 |
-| apps/dashboard/src/routes/CompletedActions.tsx | Completed actions list | Review executed items | api | Phase 5 |
-| apps/dashboard/src/routes/ExpiredApprovals.tsx | Expired approvals list | Review stale or invalid approvals | api | Phase 5 |
-| apps/dashboard/src/components/ActionTable.tsx | Shared action table | Tabular action display | shared types | Phase 5 |
-| apps/dashboard/src/components/ApprovalPanel.tsx | Approve/reject controls | Submit manager decisions | api | Phase 5 |
-| apps/dashboard/src/components/StatusBadge.tsx | Status display | Present lifecycle state consistently | shared states | Phase 5 |
-| apps/dashboard/test/dashboard.test.tsx | Dashboard behavior tests | Basic rendering and interaction | dashboard app | Phase 5 |
-| packages/sdk/src/index.ts | SDK entry point | Public exports | client, actions | Phase 5 |
-| packages/sdk/src/client.ts | HTTP client | Call gateway and handle auth headers | gateway API | Phase 5 |
+| apps/dashboard/src/App.tsx | Manager approval workspace | Credential setup, queue, detail, confirmation, decisions | SDK, api | Phase 5 |
+| apps/dashboard/src/api.ts | Dashboard API adapter | Construct SDK client and present safe client errors | SDK | Phase 5 |
+| apps/dashboard/src/styles.css | Dashboard presentation | Responsive manager-facing UI | dashboard components | Phase 5 |
+| packages/sdk/README.md | SDK guide | Agent action submission example and boundary | SDK | Phase 5 |
+| packages/sdk/src/index.ts | SDK entry point | Public exports | client, types | Phase 5 |
+| packages/sdk/src/client.ts | HTTP client | Call gateway, inject caller headers, and map errors | gateway API | Phase 5 |
 | packages/sdk/src/types.ts | SDK types | Action request and status types | shared types | Phase 5 |
-| packages/sdk/src/actions.ts | Action submission helpers | Submit and poll actions | client, polling | Phase 5 |
-| packages/sdk/src/polling.ts | Status polling | Wait for terminal state | gateway API | Phase 5 |
-| packages/sdk/test/sdk.test.ts | SDK tests | Request serialization and polling behavior | sdk client | Phase 5 |
+| packages/sdk/test/sdk.test.ts | SDK tests | Serialization, exact approval binding, pagination, and errors | sdk client | Phase 5 |
 | packages/shared/src/ids.ts | ID helpers | Stable identifiers and generation rules | none | Phase 1 |
 | packages/shared/src/schema.ts | Shared request schema | Canonical validation rules | policy, API | Phase 1-2 |
 | packages/shared/src/canonical-request.ts | Canonical hash input | Stable request identity | schema, ids | Phase 1-2 |

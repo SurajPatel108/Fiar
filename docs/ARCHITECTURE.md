@@ -8,7 +8,7 @@ The system enforces authorization outside the agent so that an LLM prompt, tool 
 
 ### Agent SDK
 
-The TypeScript SDK is the caller-facing library used by agents or agent hosts. It packages the action request, sends it to the gateway, and polls for status. It must not hold provider credentials or direct database access.
+The TypeScript SDK is the caller-facing library used by agents or agent hosts. It packages action and approval API requests and sends them to the gateway. Callers can retrieve status through typed fetch/list methods. The SDK must not hold provider credentials or direct database access.
 
 ### Fastify gateway
 

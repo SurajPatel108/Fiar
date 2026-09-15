@@ -1,6 +1,6 @@
 # Agent Authorization Firewall
 
-This repository contains the completed Phase 1 policy prototype, Phase 2 authenticated gateway intake, Phase 3 human approval API, and Phase 4 controlled execution worker backed by PostgreSQL.
+This repository contains the completed Phase 1 policy prototype, Phase 2 authenticated gateway intake, Phase 3 human approval API, Phase 4 controlled execution worker, and Phase 5 TypeScript SDK and local manager dashboard.
 
 The implemented backend is a constrained authorization firewall for AI agents: a TypeScript/Fastify/PostgreSQL system that decides whether an agent action may execute, requires human approval for selected actions, and then dispatches work through a background worker with durable state and auditability. The paper’s narrow starting point is the refund workflow, and this plan keeps that as the first implementation slice.
 
@@ -25,7 +25,7 @@ The MVP starts with the refund authorization flow described in the paper:
 
 The gateway accepts authenticated refund actions and managers can resolve exact tenant-scoped approvals. The Phase 4 worker leases queued work, rechecks authorization, reserves capacity, and calls only a narrow provider connector. The default connector is a deterministic PostgreSQL-backed fake: it makes no network calls and moves no real money.
 
-## Local Phase 4 startup
+## Local Phase 5 startup
 
 Prerequisites: Node.js with npm and Docker with Compose.
 
@@ -47,9 +47,17 @@ FIAR_DATABASE_URL=postgresql://fiar:fiar@127.0.0.1:5432/fiar \
 npm run dev:worker
 ```
 
+In a third terminal, start the manager dashboard:
+
+```sh
+npm run dev:dashboard
+```
+
+Open `http://127.0.0.1:5173`. Enter the configured local manager credential when prompted. Vite proxies the dashboard's `/v1` calls to the gateway, so no browser-only gateway route or weakened CORS/authentication path is required.
+
 The example credentials are supplied only through the local process environment and are not stored by the seed. Submit the appropriate token in the `x-fiar-dev-credential` header. The development credential adapter refuses to start unless `FIAR_RUNTIME_MODE=development`; it is not a production authentication mechanism.
 
-After creating an approval-required action, inspect it with `GET /v1/approvals/:id`, then decide it with the manager credential:
+Applications can submit actions through the transport-only TypeScript client in `packages/sdk`; see [packages/sdk/README.md](packages/sdk/README.md). After creating an approval-required action, inspect and decide it in the dashboard. The equivalent raw HTTP decision remains:
 
 ```sh
 curl -X POST http://127.0.0.1:3000/v1/approvals/APR_ID/decision \
@@ -67,9 +75,9 @@ docker exec fiar-postgres psql -U fiar -d fiar -c \
 
 The switch prevents new provider calls. A call that crossed the connector boundary before the switch committed is still finalized or reconciled from its durable attempt; Fiar does not discard or guess its outcome.
 
-Run `npm run verify` to execute strict typechecking, Phase 1 regressions, the Phase 2–3 gateway integration suite, and the Phase 4 worker suite against real PostgreSQL. Integration tests create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
+Run `npm run verify` to execute strict typechecking, Phase 1 regressions, the Phase 2–3 gateway integration suite, the Phase 4 worker suite, SDK tests, and the dashboard typecheck/production build. Integration tests create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
 
-The dashboard and SDK remain deferred. No production provider connector exists, and the fake connector cannot execute a real refund.
+The SDK and dashboard are clients only: policy, identity, tenant scope, approval binding, execution, and reconciliation remain server-side. Production authentication/dashboard sessions, a real payment provider, deployment packaging, webhooks, and broader workflows remain deferred. The fake connector cannot execute a real refund.
 
 ## Notes on the paper
 

@@ -8,20 +8,30 @@
     "test:policy": "tsx --test apps/gateway/test/policy.test.ts",
     "test:integration": "tsx --test apps/gateway/test/actions.test.ts apps/gateway/test/security.test.ts apps/gateway/test/approvals.test.ts",
     "test:worker": "tsx --test apps/worker/test/*.test.ts",
-    "verify": "npm run typecheck && npm test && npm run test:integration && npm run test:worker",
+    "test:sdk": "tsx --test packages/sdk/test/*.test.ts",
+    "dashboard:typecheck": "tsc --noEmit -p apps/dashboard/tsconfig.json",
+    "dashboard:build": "vite build --config apps/dashboard/vite.config.ts",
+    "dashboard:check": "npm run dashboard:typecheck && npm run dashboard:build",
+    "verify": "npm run typecheck && npm test && npm run test:integration && npm run test:worker && npm run test:sdk && npm run dashboard:check",
     "db:setup": "tsx apps/gateway/src/migrate.ts",
     "dev:gateway": "tsx apps/gateway/src/server.ts",
     "dev:worker": "tsx apps/worker/src/server.ts",
+    "dev:dashboard": "vite --config apps/dashboard/vite.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "fastify": "^5.4.0",
-    "pg": "^8.13.3"
+    "pg": "^8.13.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
     "@types/pg": "^8.23.1",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
     "tsx": "^4.19.4",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
   }
 }
