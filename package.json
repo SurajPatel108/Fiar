@@ -1,0 +1,16 @@
+{
+  "name": "agent-authorization-firewall",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test packages/shared/test/*.test.ts apps/gateway/test/policy.test.ts",
+    "test:shared": "tsx --test packages/shared/test/*.test.ts",
+    "test:policy": "tsx --test apps/gateway/test/policy.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.2"
+  }
+}
