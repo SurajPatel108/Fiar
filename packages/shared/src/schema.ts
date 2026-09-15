@@ -21,6 +21,13 @@ export function isRefundActionRequest(value: unknown): value is RefundActionRequ
     return false;
   }
 
+  const allowedKeys = ['tool', 'orderId', 'amountMinor', 'currency', 'idempotencyKey'];
+  const keys = Object.keys(value);
+
+  if (keys.length !== allowedKeys.length || keys.some((key) => !allowedKeys.includes(key))) {
+    return false;
+  }
+
   const amountMinor = value.amountMinor;
 
   return (

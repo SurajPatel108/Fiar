@@ -1,10 +1,16 @@
-import type { Facts, PolicyDecision } from '../../../packages/shared/src/policy-types';
+import { isFacts, type Facts, type PolicyDecision } from '../../../packages/shared/src/policy-types';
 
 function deny(reason: string): PolicyDecision {
   return { decision: 'DENY', reason };
 }
 
-export function decide(facts: Facts): PolicyDecision {
+export function decide(input: Facts): PolicyDecision {
+  if (!isFacts(input)) {
+    return deny('INVALID_FACTS');
+  }
+
+  const facts = input;
+
   if (!facts.active) {
     return deny('AGENT_SUSPENDED');
   }

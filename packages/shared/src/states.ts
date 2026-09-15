@@ -28,7 +28,7 @@ export const ACTION_STATUS_TRANSITIONS: Readonly<Record<ActionStatus, readonly A
   approved: ['queued', 'suspended'],
   queued: ['dispatched', 'pending_reconciliation', 'suspended'],
   dispatched: ['completed', 'failed', 'pending_reconciliation'],
-  pending_reconciliation: ['queued', 'completed', 'failed', 'suspended'],
+  pending_reconciliation: ['queued', 'completed', 'failed'],
   completed: [],
   failed: [],
   expired: [],

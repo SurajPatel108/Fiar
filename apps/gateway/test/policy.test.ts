@@ -22,3 +22,9 @@ test('refund policy boundaries', () => {
   assert.equal(decide({ ...base, budgetAvailableMinor: 1 }).decision, 'DENY');
   assert.equal(decide({ ...base, orderExposureMinor: 100 }).decision, 'REQUIRE_APPROVAL');
 });
+
+test('refund policy rejects missing or invalid facts', () => {
+  assert.equal(decide({ ...base, remainingMinor: Number.NaN } as Facts).decision, 'DENY');
+  assert.equal(decide({ ...base, budgetAvailableMinor: Number.POSITIVE_INFINITY } as Facts).decision, 'DENY');
+  assert.equal(decide({ ...base, active: 'true' } as unknown as Facts).decision, 'DENY');
+});

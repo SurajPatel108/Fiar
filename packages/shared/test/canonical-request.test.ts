@@ -6,6 +6,7 @@ import {
   hashCanonicalRefundActionRequest,
   stableStringify,
 } from '../src/canonical-request';
+import { assertRefundActionRequest } from '../src/schema';
 import type { RefundActionRequest } from '../src/schema';
 
 test('canonical request hash is stable for equivalent inputs', () => {
@@ -34,4 +35,19 @@ test('canonical request hash is stable for equivalent inputs', () => {
 
 test('stable stringify sorts object keys recursively', () => {
   assert.equal(stableStringify({ b: 1, a: { d: 4, c: 3 } }), '{"a":{"c":3,"d":4},"b":1}');
+});
+
+test('refund request validation rejects unknown fields', () => {
+  assert.throws(
+    () =>
+      assertRefundActionRequest({
+        tool: 'refund.create',
+        orderId: 'ord_123',
+        amountMinor: 4900,
+        currency: 'USD',
+        idempotencyKey: 'idem-1',
+        manager: true,
+      }),
+    /Invalid refund action request/,
+  );
 });
