@@ -98,6 +98,14 @@ Tradeoff:
 3. Pending approvals default to 24 hours and are configurable with `FIAR_APPROVAL_EXPIRY_HOURS`.
 4. Policy denial is returned and durably recorded as a normal action response. Malformed, unauthenticated, forbidden, missing-fact, and conflicting requests use HTTP errors.
 
+## Phase 3 decisions
+
+1. Only active managers and admins may read or decide approvals; agents and services are forbidden.
+2. Manager approval atomically moves an action from `awaiting_approval` to `queued`; manager rejection moves it to `denied`.
+3. Expired, policy-stale, or requester-suspended approvals are durably resolved as `expired` on manager reads or decision attempts.
+4. Approval requests use the displayed request hash and policy version ID as optimistic exact-binding checks.
+5. The dashboard is deferred because the repository does not yet contain a frontend toolchain.
+
 ## Questions that block later phases
 
 1. What should happen to queued work when a tenant is suspended: keep, cancel, or reconcile to terminal failure?

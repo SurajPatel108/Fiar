@@ -7,6 +7,7 @@ test('action state transitions reflect the planned lifecycle', () => {
   assert.equal(canTransitionActionStatus('pending', 'awaiting_approval'), true);
   assert.equal(canTransitionActionStatus('pending', 'queued'), true);
   assert.equal(canTransitionActionStatus('pending', 'completed'), false);
+  assert.equal(canTransitionActionStatus('awaiting_approval', 'queued'), true);
   assert.equal(canTransitionActionStatus('queued', 'pending_reconciliation'), true);
   assert.equal(canTransitionActionStatus('pending_reconciliation', 'completed'), true);
   assert.equal(canTransitionActionStatus('pending_reconciliation', 'suspended'), false);

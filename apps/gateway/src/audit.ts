@@ -7,7 +7,8 @@ export interface AuditEventInput {
   actionId: string;
   actorType: 'agent' | 'manager' | 'admin' | 'service';
   requestHash: string;
-  decision: 'ALLOW' | 'DENY' | 'REQUIRE_APPROVAL';
+  eventType?: 'action.recorded' | 'approval.approved' | 'approval.rejected' | 'approval.expired';
+  decision: 'ALLOW' | 'DENY' | 'REQUIRE_APPROVAL' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
   reason: string;
   correlationId: string;
   payload: Record<string, unknown>;
@@ -34,7 +35,7 @@ export async function insertAuditEvent(client: PoolClient, input: AuditEventInpu
       auditId,
       input.tenantId,
       input.actionId,
-      'action.recorded',
+      input.eventType ?? 'action.recorded',
       input.actorType,
       input.requestHash,
       input.decision,

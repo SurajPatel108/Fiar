@@ -1,6 +1,6 @@
 # Agent Authorization Firewall
 
-This repository contains the completed Phase 1 policy prototype and the completed Phase 2 authenticated gateway intake backed by PostgreSQL.
+This repository contains the completed Phase 1 policy prototype, Phase 2 authenticated gateway intake, and Phase 3 human approval API backed by PostgreSQL.
 
 The project is a constrained authorization firewall for AI agents: a TypeScript/React/Fastify/PostgreSQL system that decides whether an agent action may execute, requires human approval for selected actions, and then dispatches work through a background worker with durable state and auditability. The paper’s narrow starting point is the refund workflow, and this plan keeps that as the first implementation slice.
 
@@ -23,9 +23,9 @@ The MVP starts with the refund authorization flow described in the paper:
 - A manager approves or rejects the exact request.
 - A background worker performs execution with idempotency, reconciliation, and audit logging.
 
-Phase 2 accepts authenticated refund actions, derives tenant and permissions from a development-only credential adapter, loads tenant-owned facts and a published policy, and transactionally records the action, audit decision, and either pending approval or outbox work. It does not execute refunds.
+The gateway accepts authenticated refund actions, derives tenant and permissions from a development-only credential adapter, loads tenant-owned facts and a published policy, and transactionally records the action and audit decision. Managers and admins can inspect exact tenant-scoped approvals, reject them, or queue approved work. Nothing executes refunds in this phase.
 
-## Local Phase 2 startup
+## Local Phase 3 startup
 
 Prerequisites: Node.js with npm and Docker with Compose.
 
@@ -35,15 +35,24 @@ docker compose -f infra/compose/docker-compose.yml up -d postgres
 FIAR_DATABASE_URL=postgresql://fiar:fiar@127.0.0.1:5432/fiar npm run db:setup
 FIAR_RUNTIME_MODE=development \
 FIAR_DATABASE_URL=postgresql://fiar:fiar@127.0.0.1:5432/fiar \
-FIAR_DEV_CREDENTIALS_JSON='[{"token":"local-alpha-agent","principalId":"prn_demo_alpha_agent"}]' \
+FIAR_DEV_CREDENTIALS_JSON='[{"token":"local-alpha-agent","principalId":"prn_demo_alpha_agent"},{"token":"local-alpha-manager","principalId":"prn_demo_alpha_manager"}]' \
 npm run dev:gateway
 ```
 
-The example secret is supplied only through the local process environment and is not stored by the seed. Submit it in the `x-fiar-dev-credential` header. The development credential adapter refuses to start unless `FIAR_RUNTIME_MODE=development`; it is not a production authentication mechanism.
+The example credentials are supplied only through the local process environment and are not stored by the seed. Submit the appropriate token in the `x-fiar-dev-credential` header. The development credential adapter refuses to start unless `FIAR_RUNTIME_MODE=development`; it is not a production authentication mechanism.
 
-Run `npm run verify` to execute strict typechecking, Phase 1 regressions, and the real PostgreSQL Phase 2 integration suite. Integration tests create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
+After creating an approval-required action, inspect it with `GET /v1/approvals/:id`, then decide it with the manager credential:
 
-Phase 3 approval-decision endpoints, the worker, provider integrations, SDK, and dashboard are intentionally not implemented yet.
+```sh
+curl -X POST http://127.0.0.1:3000/v1/approvals/APR_ID/decision \
+  -H 'content-type: application/json' \
+  -H 'x-fiar-dev-credential: local-alpha-manager' \
+  -d '{"decision":"approve","comment":"Reviewed","expectedRequestHash":"SHA256_FROM_DETAIL","expectedPolicyVersion":"POLICY_ID_FROM_DETAIL"}'
+```
+
+Run `npm run verify` to execute strict typechecking, Phase 1 regressions, and the real PostgreSQL Phase 2 and Phase 3 integration suites. Integration tests create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
+
+The dashboard is deferred because no frontend toolchain exists yet. The worker, provider integrations, SDK, and real refund execution are also intentionally not implemented.
 
 ## Notes on the paper
 

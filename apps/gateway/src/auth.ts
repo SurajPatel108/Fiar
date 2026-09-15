@@ -15,7 +15,7 @@ export interface AuthenticatedPrincipal {
   permissions: readonly ActionPermission[];
 }
 
-export type ActionPermission = 'actions:create' | 'actions:read';
+export type ActionPermission = 'actions:create' | 'actions:read' | 'approvals:read' | 'approvals:decide';
 
 export type DevCredentialDirectory = ReadonlyMap<string, string>;
 
@@ -141,7 +141,7 @@ function permissionsForPrincipalType(principalType: AuthenticatedPrincipal['prin
       return ['actions:create', 'actions:read'];
     case 'manager':
     case 'admin':
-      return ['actions:read'];
+      return ['actions:read', 'approvals:read', 'approvals:decide'];
   }
 }
 

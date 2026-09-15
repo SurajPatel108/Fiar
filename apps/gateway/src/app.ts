@@ -4,6 +4,13 @@ import type { Pool } from 'pg';
 
 import { authenticateRequest, requirePermission, type DevCredentialDirectory } from './auth';
 import { createAction, getActionById, listActions } from './actions';
+import {
+  decideApproval,
+  getApprovalById,
+  listApprovals,
+  parseApprovalDecision,
+  parseApprovalListQuery,
+} from './approvals';
 import { DomainError } from '../../../packages/shared/src/errors';
 import { mapDomainErrorToStatusCode, toHttpErrorPayload } from './errors';
 
@@ -13,6 +20,7 @@ export interface GatewayAppOptions {
   approvalExpiryHours: number;
   testHooks?: {
     failAfterPersist?: boolean;
+    failAfterApprovalDecisionPersist?: boolean;
   };
 }
 
@@ -144,6 +152,43 @@ export async function buildGatewayApp(options: GatewayAppOptions): Promise<Fasti
       requirePermission(principal, 'actions:read');
       const page = await listActions(options.pool, principal, parseListQuery(request.query));
       reply.code(200).send(page);
+    });
+  });
+
+  app.get('/v1/approvals', async (request, reply) => {
+    await callSafely(reply, async () => {
+      const principal = await authenticateRequest(request, options.pool, options.devCredentials);
+      requirePermission(principal, 'approvals:read');
+      const page = await listApprovals(options.pool, principal, parseApprovalListQuery(request.query));
+      reply.code(200).send(page);
+    });
+  });
+
+  app.get('/v1/approvals/:id', async (request, reply) => {
+    await callSafely(reply, async () => {
+      const principal = await authenticateRequest(request, options.pool, options.devCredentials);
+      requirePermission(principal, 'approvals:read');
+      const approval = await getApprovalById(
+        options.pool,
+        principal,
+        (request.params as { id: string }).id,
+      );
+      reply.code(200).send(approval);
+    });
+  });
+
+  app.post('/v1/approvals/:id/decision', async (request, reply) => {
+    await callSafely(reply, async () => {
+      const principal = await authenticateRequest(request, options.pool, options.devCredentials);
+      requirePermission(principal, 'approvals:decide');
+      const approval = await decideApproval(
+        options.pool,
+        principal,
+        (request.params as { id: string }).id,
+        parseApprovalDecision(request.body),
+        { testFailAfterDecisionPersist: options.testHooks?.failAfterApprovalDecisionPersist ?? false },
+      );
+      reply.code(200).send(approval);
     });
   });
 

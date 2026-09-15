@@ -1,6 +1,6 @@
 # File Map
 
-This is the MVP file structure. Phase 1 and Phase 2 gateway/shared files exist; later-phase worker, dashboard, SDK, and approval-decision files remain proposed.
+This is the MVP file structure. Phase 1, Phase 2, and the Phase 3 backend exist; the dashboard, worker, and SDK remain proposed.
 
 ## Proposed tree
 
@@ -87,6 +87,7 @@ db/
     0001_init.sql
     0002_actions_and_approvals.sql
     0003_outbox_and_audit.sql
+    0004_approval_decisions.sql
   seeds/
     local-dev.sql
 infra/
@@ -111,10 +112,10 @@ infra/
 | docs/IMPLEMENTATION_PLAN.md | Ordered build plan | Phase breakdown and verification | All planning docs | Phase 0 |
 | docs/SECURITY_AND_TESTING.md | Security model and test map | Invariants, threats, test coverage | Data/API, architecture | Phase 0 |
 | docs/DECISIONS_AND_QUESTIONS.md | Decision log | Assumptions, tradeoffs, blockers | Paper review | Phase 0 |
-| apps/gateway/src/app.ts | Fastify app assembly | Register routes, validation, plugins | config, db, auth, policy | Phase 1-2 |
+| apps/gateway/src/app.ts | Fastify app assembly | Register routes, validation, plugins | config, db, auth, policy | Phase 1-3 |
 | apps/gateway/src/server.ts | Local server entry | Start gateway process | app | Phase 1-2 |
 | apps/gateway/src/config.ts | Runtime config loading | Ports, secrets, env validation | shared schema | Phase 1 |
-| apps/gateway/src/auth.ts | Auth helpers | Derive tenant and roles | config, shared types | Phase 1-2 |
+| apps/gateway/src/auth.ts | Auth helpers | Derive tenant, roles, and permissions | config, shared types | Phase 1-3 |
 | apps/gateway/src/canonicalize.ts | Request normalization | Stable hashes and request identity | shared canonical types | Phase 1-2 |
 | apps/gateway/src/policy.ts | Authorization logic | Allow/deny/approval decisions | shared policy types | Phase 2 |
 | apps/gateway/src/actions.ts | Action lifecycle routes | Create, fetch, and list actions | db, auth, policy | Phase 2 |
@@ -164,6 +165,7 @@ infra/
 | db/migrations/0001_init.sql | Initial schema | Tenants, users, actions, approvals, audit | data model | Phase 1 |
 | db/migrations/0002_actions_and_approvals.sql | Action schema expansion | Canonical request, status, hash, expiry | initial schema | Phase 2-3 |
 | db/migrations/0003_outbox_and_audit.sql | Worker and audit schema | Outbox, reservations, reconciliation | action schema | Phase 2 |
+| db/migrations/0004_approval_decisions.sql | Approval resolution schema | Exact binding, manager decisions, expiry, pagination | action schema | Phase 3 |
 | db/seeds/local-dev.sql | Local seed data | Demo tenant and fixture records | migrations | Phase 1 |
 | infra/docker/Dockerfile.gateway | Gateway container image | Build/runtime packaging | gateway app | Phase 6 |
 | infra/docker/Dockerfile.worker | Worker container image | Build/runtime packaging | worker app | Phase 6 |

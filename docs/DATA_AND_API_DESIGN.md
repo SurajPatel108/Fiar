@@ -153,8 +153,9 @@ Important fields:
 - `action_id`.
 - `tenant_id`.
 - `manager_principal_id` after a manager has reviewed it; pending requests do not require one.
-- `decision`: approved or rejected.
-- `decision_reason`.
+- `status`: pending, approved, rejected, or expired.
+- `decision`: approve or reject after a manager decision.
+- `manager_comment`, `resolution_reason`, and `resolved_at`.
 - `policy_version_at_decision`.
 - `request_hash_at_decision`.
 - `expires_at`.
@@ -237,10 +238,9 @@ stateDiagram-v2
   pending --> denied: policy deny
   pending --> awaiting_approval: policy requires approval
   pending --> queued: policy allow
-  awaiting_approval --> approved: manager approves
+  awaiting_approval --> queued: manager approves and creates outbox row
   awaiting_approval --> denied: manager rejects
   awaiting_approval --> expired: approval expires
-  approved --> queued: outbox created
   queued --> dispatched: worker sends request
   dispatched --> completed: provider success
   dispatched --> failed: provider failure
@@ -322,6 +322,14 @@ Query fields:
 
 Results use descending `(created_at, id)` keyset order and return an opaque `nextCursor`. Unknown query fields and malformed cursors are rejected with `400`.
 
+### GET /v1/approvals
+
+Lists approvals visible to an authenticated manager or admin in the caller's tenant. Optional `status`, `limit`, and `cursor` fields use the same bounded keyset rules as action listing. Due, policy-stale, or requester-suspended pending approvals are transactionally materialized as expired before results are returned.
+
+### GET /v1/approvals/:id
+
+Returns the exact approval-bound action fields, request hash, policy version ID, timestamps, resolution fields, and a whitelist of authoritative decision facts. Credentials, idempotency keys, canonical request payloads, tenant/principal internals, and outbox payloads are excluded.
+
 ### POST /v1/approvals/:id/decision
 
 Records a manager decision for an exact pending approval.
@@ -329,22 +337,22 @@ Records a manager decision for an exact pending approval.
 Authentication:
 
 - Required.
-- Manager role required.
+- Manager or admin role required.
 - Agent credentials must be rejected.
 
 Request fields:
 
-- `decision`: approve or reject.
+- `decision`: `approve` or `reject`.
 - `comment` optional.
-- `expectedRequestHash`.
-- `expectedPolicyVersion`.
+- `expectedRequestHash`: lowercase SHA-256 shown by the detail endpoint.
+- `expectedPolicyVersion`: exact `policyVersionId` shown by the detail endpoint.
 
 Response fields:
 
 - `approvalId`.
 - `actionId`.
 - `decision`.
-- `status`.
+- approval and action status, resolution reason, safe comment, exact binding fields, and timestamps.
 
 Errors:
 
@@ -352,6 +360,10 @@ Errors:
 - `403` forbidden for non-managers.
 - `404` if the approval is not visible to the tenant.
 - `409` if the request changed, the approval expired, or the decision is no longer valid.
+
+Approval locks the approval and action rows, rechecks active tenant/manager/requester authority and the active policy, and records the decision atomically. Approval moves the action directly to `queued` and creates one outbox row; rejection moves it to `denied` and creates no outbox work. A queued action has not executed and no funds are reserved in Phase 3.
+
+## Planned later endpoints
 
 ### POST /v1/agents/:id/suspend
 

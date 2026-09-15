@@ -11,6 +11,8 @@ insert into principals (id, tenant_id, type, status, external_subject)
 values
   ('prn_demo_alpha_agent', 'ten_demo_alpha', 'agent', 'active', 'dev-agent-alpha'),
   ('prn_demo_alpha_manager', 'ten_demo_alpha', 'manager', 'active', 'dev-manager-alpha'),
+  ('prn_demo_alpha_admin', 'ten_demo_alpha', 'admin', 'active', 'dev-admin-alpha'),
+  ('prn_demo_alpha_service', 'ten_demo_alpha', 'service', 'active', 'dev-service-alpha'),
   ('prn_demo_beta_agent', 'ten_demo_beta', 'agent', 'active', 'dev-agent-beta'),
   ('prn_demo_beta_manager', 'ten_demo_beta', 'manager', 'active', 'dev-manager-beta')
 on conflict (id) do update set

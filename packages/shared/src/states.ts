@@ -24,7 +24,7 @@ export const ACTION_TERMINAL_STATUSES = [
 export const ACTION_STATUS_TRANSITIONS: Readonly<Record<ActionStatus, readonly ActionStatus[]>> = {
   pending: ['denied', 'awaiting_approval', 'queued', 'suspended'],
   denied: [],
-  awaiting_approval: ['approved', 'denied', 'expired', 'suspended'],
+  awaiting_approval: ['approved', 'queued', 'denied', 'expired', 'suspended'],
   approved: ['queued', 'suspended'],
   queued: ['dispatched', 'pending_reconciliation', 'suspended'],
   dispatched: ['completed', 'failed', 'pending_reconciliation'],

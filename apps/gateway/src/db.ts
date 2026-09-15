@@ -47,7 +47,12 @@ export async function applySchema(pool: Pool): Promise<void> {
     const { rows } = await client.query<{ name: string }>('select name from schema_migrations order by name');
     const applied = new Set(rows.map((row) => row.name));
 
-    for (const fileName of ['0001_init.sql', '0002_actions_and_approvals.sql', '0003_outbox_and_audit.sql']) {
+    for (const fileName of [
+      '0001_init.sql',
+      '0002_actions_and_approvals.sql',
+      '0003_outbox_and_audit.sql',
+      '0004_approval_decisions.sql',
+    ]) {
       if (applied.has(fileName)) {
         continue;
       }

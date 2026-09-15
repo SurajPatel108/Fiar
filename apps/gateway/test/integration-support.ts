@@ -20,6 +20,8 @@ export function createTestCredentialDirectory() {
     FIAR_DEV_CREDENTIALS_JSON: JSON.stringify([
       { token: 'alpha-agent', principalId: 'prn_demo_alpha_agent' },
       { token: 'alpha-manager', principalId: 'prn_demo_alpha_manager' },
+      { token: 'alpha-admin', principalId: 'prn_demo_alpha_admin' },
+      { token: 'alpha-service', principalId: 'prn_demo_alpha_service' },
       { token: 'beta-agent', principalId: 'prn_demo_beta_agent' },
       { token: 'beta-manager', principalId: 'prn_demo_beta_manager' },
     ]),

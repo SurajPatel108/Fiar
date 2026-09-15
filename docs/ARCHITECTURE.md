@@ -79,17 +79,17 @@ sequenceDiagram
   participant GW as Gateway
   participant DB as PostgreSQL
 
-  UI->>GW: GET pending actions
-  GW->>DB: Read action + approval state
+  UI->>GW: GET tenant-scoped approvals
+  GW->>DB: Materialize expiry and read exact binding
   DB-->>GW: Pending immutable request
   GW-->>UI: Show exact request details
   UI->>GW: POST approve/reject decision
-  GW->>DB: Re-check tenant, role, hash, version, expiry, pending status
-  DB-->>GW: Valid or invalid
-  GW-->>UI: Decision accepted or rejected
+  GW->>DB: Lock and re-check tenant, role, requester, hash, active version, expiry, pending status
+  DB-->>GW: Commit approve + outbox, reject, expire, or conflict
+  GW-->>UI: Durable decision status
 ```
 
-Approval must be bound to the exact immutable request, the current policy version, the tenant, and the manager identity. Editing the request should create a new request rather than mutating the approved one.
+Approval is bound to the exact immutable request, original policy version, tenant, and deciding manager identity. The original policy must still be active. Approval atomically queues outbox work; rejection terminates the action as denied; stale authority expires it. Editing the request requires a new action.
 
 ## Execution lifecycle
 

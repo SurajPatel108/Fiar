@@ -178,6 +178,8 @@ Verification:
 
 Goal: require exact manager approval for threshold actions and invalidate stale approvals.
 
+Status: complete (backend API); dashboard deferred.
+
 Tasks:
 
 1. Add approval records tied to the immutable action hash.
@@ -193,17 +195,7 @@ Files to create or change:
 
 - apps/gateway/src/approvals.ts
 - apps/gateway/test/approvals.test.ts
-- apps/dashboard/src/main.tsx
-- apps/dashboard/src/App.tsx
-- apps/dashboard/src/api.ts
-- apps/dashboard/src/routes/PendingApprovals.tsx
-- apps/dashboard/src/routes/ApprovalDetail.tsx
-- apps/dashboard/src/routes/CompletedActions.tsx
-- apps/dashboard/src/routes/ExpiredApprovals.tsx
-- apps/dashboard/src/components/ActionTable.tsx
-- apps/dashboard/src/components/ApprovalPanel.tsx
-- apps/dashboard/src/components/StatusBadge.tsx
-- apps/dashboard/test/dashboard.test.tsx
+- db/migrations/0004_approval_decisions.sql
 
 Expected behavior:
 
@@ -217,13 +209,29 @@ Acceptance criteria:
 - Rejected or expired approvals cannot be replayed.
 - Editing the request creates a new action rather than mutating the approved one.
 
-The approval path must read the published policy version active at action creation time and record that version on the approval row.
+The approval path binds the stored approval to the action's exact request hash and policy version, and also requires that policy version to remain active at decision time.
 
 Verification steps:
 
 - Approve the threshold fixture and confirm it moves forward once.
 - Expire an approval and confirm the old decision is unusable.
 - Call the approval endpoint with an agent credential and confirm authorization fails.
+
+Completed deliverables:
+
+- Manager/admin-only approval list, detail, approve, and reject APIs.
+- Stable bounded approval pagination and status filtering.
+- Transactional exact-binding, expiry, policy-staleness, suspension, concurrency, rollback, audit, and outbox behavior.
+- Durable `approved`, `rejected`, and `expired` approval records; rejection maps the action to `denied`.
+- PostgreSQL integration coverage for all backend Phase 3 acceptance criteria.
+
+Verification:
+
+- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, and 35 Phase 2/3 PostgreSQL integration tests.
+
+Dashboard status:
+
+- Deferred to the existing dashboard phase because this repository has no React application or frontend build configuration.
 
 ## Phase 4: Worker, outbox, and provider reconciliation
 
