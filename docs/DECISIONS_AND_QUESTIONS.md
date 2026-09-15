@@ -91,14 +91,17 @@ Tradeoff:
 - The first provider can be a mock or sandbox connector.
 - Audit retention can start short and be extended later.
 
-## Questions that block implementation
+## Phase 2 decisions
 
-1. What is the authoritative source of tenant identity for the MVP auth flow?
-2. What exact fields define the canonical request hash for refunds?
-3. What is the initial approval expiry duration?
-4. What should happen to queued work when a tenant is suspended: keep, cancel, or reconcile to terminal failure?
-5. Which provider sandbox or mock contract should the worker target first?
-6. Is `POST /v1/actions` expected to return a denial as a normal response or an HTTP error for the MVP?
+1. Local development uses an explicitly development-only environment credential directory mapping opaque tokens to server-side principal records. Production identity remains a future hardening decision.
+2. The refund canonical hash covers `tool`, `orderId`, `amountMinor`, and `currency`; it deliberately excludes the idempotency key.
+3. Pending approvals default to 24 hours and are configurable with `FIAR_APPROVAL_EXPIRY_HOURS`.
+4. Policy denial is returned and durably recorded as a normal action response. Malformed, unauthenticated, forbidden, missing-fact, and conflicting requests use HTTP errors.
+
+## Questions that block later phases
+
+1. What should happen to queued work when a tenant is suspended: keep, cancel, or reconcile to terminal failure?
+2. Which provider sandbox or mock contract should the worker target first?
 
 ## Questions that can wait
 

@@ -1,6 +1,6 @@
 # File Map
 
-This is the proposed MVP file structure. None of these application files exist yet.
+This is the MVP file structure. Phase 1 and Phase 2 gateway/shared files exist; later-phase worker, dashboard, SDK, and approval-decision files remain proposed.
 
 ## Proposed tree
 

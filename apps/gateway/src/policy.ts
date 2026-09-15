@@ -4,8 +4,8 @@ function deny(reason: string): PolicyDecision {
   return { decision: 'DENY', reason };
 }
 
-export function decide(input: Facts): PolicyDecision {
-  if (!isFacts(input)) {
+export function decide(input: Facts, approvalThresholdMinor: unknown = 5000): PolicyDecision {
+  if (!isFacts(input) || !Number.isSafeInteger(approvalThresholdMinor) || (approvalThresholdMinor as number) < 1) {
     return deny('INVALID_FACTS');
   }
 
@@ -31,7 +31,7 @@ export function decide(input: Facts): PolicyDecision {
     return deny('BUDGET_EXCEEDED');
   }
 
-  if (facts.orderExposureMinor + facts.amountMinor >= 5000) {
+  if (facts.orderExposureMinor + facts.amountMinor >= (approvalThresholdMinor as number)) {
     return {
       decision: 'REQUIRE_APPROVAL',
       reason: 'ORDER_EXPOSURE_THRESHOLD',

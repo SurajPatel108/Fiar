@@ -106,6 +106,8 @@ Completed deliverables:
 
 Goal: accept authenticated refund requests, derive tenant identity server-side, and persist immutable actions.
 
+Status: complete.
+
 Tasks:
 
 1. Add gateway configuration and authentication helpers.
@@ -156,6 +158,21 @@ Verification steps:
 - Create a request twice and confirm the same action identifier is returned.
 - Attempt a wrong-tenant read and confirm it fails closed.
 - Force a transaction rollback and verify no partial action remains.
+
+Completed deliverables:
+
+- Authenticated `POST /v1/actions`, `GET /v1/actions/:id`, and bounded keyset-paginated `GET /v1/actions`.
+- Transactional PostgreSQL persistence for actions, audit decisions, pending approvals, and outbox entries.
+- Durable tenant-scoped idempotency, including simultaneous replay recovery after rollback.
+- Immutable action and published-policy constraints plus tenant-consistent composite foreign keys.
+- Development seed/migration runner and isolated PostgreSQL integration harness.
+- Integration coverage for all Phase 2 intake, isolation, durability, rollback, pagination, and redaction acceptance cases.
+
+Verification:
+
+- `npm run typecheck`
+- `npm test`
+- `npm run test:integration` against PostgreSQL 16
 
 ## Phase 3: Human approval flow
 

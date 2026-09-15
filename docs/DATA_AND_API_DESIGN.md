@@ -145,14 +145,14 @@ Constraints:
 
 ### Approval
 
-Represents a manager decision on a specific action.
+Represents a pending manager review in Phase 2 and, beginning in Phase 3, a manager decision on a specific action.
 
 Important fields:
 
 - `id`.
 - `action_id`.
 - `tenant_id`.
-- `manager_principal_id`.
+- `manager_principal_id` after a manager has reviewed it; pending requests do not require one.
 - `decision`: approved or rejected.
 - `decision_reason`.
 - `policy_version_at_decision`.
@@ -281,6 +281,7 @@ Response fields:
 - `decision`.
 - `reason`.
 - `approvalId` when approval is required.
+- `orderId`, `amountMinor`, `currency`, `policyVersionId`, `createdAt`, and `updatedAt`.
 
 Errors:
 
@@ -288,7 +289,7 @@ Errors:
 - `401` for missing or invalid authentication.
 - `403` for wrong tenant, suspended tenant, or disallowed tool.
 - `409` for idempotency hash mismatch or duplicate conflicting request.
-- `422` for business-rule denial when the API chooses to represent denial as an error rather than a normal response.
+- Policy denial is represented as a normal `201` decision response with status `denied`.
 
 Recommendation:
 
@@ -303,9 +304,7 @@ Authentication:
 - Required.
 - Tenant isolation applies.
 
-Response fields:
-
-- `id`, `tenantId`, `tool`, `status`, `reason`, `policyVersion`, `requestHash`, `createdAt`, `updatedAt`.
+Response fields are the same safe action representation returned by creation. Tenant IDs, principal IDs, request hashes, canonical request bodies, idempotency keys, and credentials are not returned.
 
 Errors:
 
@@ -318,8 +317,10 @@ Lists actions for the authenticated tenant.
 Query fields:
 
 - `status` optional.
-- `tool` optional.
+- `limit` optional, from 1 through 100; defaults to 20.
 - `cursor` optional.
+
+Results use descending `(created_at, id)` keyset order and return an opaque `nextCursor`. Unknown query fields and malformed cursors are rejected with `400`.
 
 ### POST /v1/approvals/:id/decision
 

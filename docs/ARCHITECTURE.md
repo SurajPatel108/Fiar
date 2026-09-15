@@ -27,7 +27,7 @@ The React dashboard is for authenticated human approvers only. It shows pending 
 The worker claims outbox rows, checks the current action state again, reserves capacity, calls the downstream provider through restricted credentials, and reconciles ambiguous or crashed executions.
 
 ### Restricted connector
-PostgreSQL is the system of record for actions, approvals, reservations, policy versions, order facts, execution attempts, audit events, idempotency keys, and worker outbox rows. It is the source of truth for state transitions and concurrency control.
+
 The connector is the only component allowed to talk to the provider API. It uses credentials that are not available to the agent or SDK. The connector should be treated as a narrow, audited boundary rather than a general integration layer.
 
 ### Audit and observability
@@ -46,6 +46,8 @@ flowchart LR
   Q --> W[Background Worker]
   W --> C[Restricted Connector]
   C --> P[Provider API]
+```
+
 - The agent is untrusted.
 - The SDK is untrusted for authorization decisions.
 - The gateway is trusted to authenticate, validate, and persist state, but not to perform provider side effects.
@@ -65,9 +67,6 @@ flowchart TD
   F -->|ALLOW| H[Create dispatchable outbox item]
   F -->|REQUIRE_APPROVAL| I[Create approval request]
   H --> J[Return action accepted]
-  dispatched --> pending_reconciliation: ambiguous provider outcome
-  pending_reconciliation --> queued: reconciliation confirms retry is safe
-  pending_reconciliation --> completed: late success confirmation
 ```
 
 The policy result is not the final side effect. Even an allow decision only means the request may be dispatched later by the worker.
