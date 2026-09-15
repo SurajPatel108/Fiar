@@ -4,12 +4,14 @@ export type ActionStatus =
   | 'pending'
   | 'denied'
   | 'awaiting_approval'
+  | 'approved'
   | 'queued'
   | 'dispatched'
   | 'pending_reconciliation'
   | 'completed'
   | 'failed'
   | 'expired'
+  | 'canceled'
   | 'suspended';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';

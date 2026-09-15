@@ -68,16 +68,20 @@ test('submits the exact gateway action schema with caller credentials', async ()
   assert.equal(calls[0]?.input, 'https://fiar.example/v1/actions');
   assert.equal(calls[0]?.init?.method, 'POST');
   assert.deepEqual(JSON.parse(String(calls[0]?.init?.body)), request);
-  assert.equal((calls[0]?.init?.headers as Record<string, string>)['x-fiar-dev-credential'], 'agent-secret');
+  const headers = calls[0]?.init?.headers as Record<string, string>;
+  assert.equal(headers['x-fiar-dev-credential'], 'agent-secret');
+  assert.equal(headers['content-type'], 'application/json');
 });
 
 test('constructs action and approval list pagination without undefined fields', async () => {
   const urls: string[] = [];
+  const calls: RecordedCall[] = [];
   const client = new FiarClient({
     baseUrl: '',
     getCredentialHeaders: () => ({ authorization: 'Bearer ephemeral' }),
-    fetch: async (input) => {
+    fetch: async (input, init) => {
       urls.push(input);
+      calls.push({ input, init });
       return jsonResponse({ items: [], nextCursor: null });
     },
   });
@@ -87,15 +91,18 @@ test('constructs action and approval list pagination without undefined fields', 
 
   assert.equal(urls[0], '/v1/actions?status=queued&limit=10');
   assert.equal(urls[1], '/v1/approvals?status=pending&limit=20&cursor=next%2Fcursor');
+  assert.ok(calls.every((call) => call.init?.method === 'GET' && call.init.body === undefined));
+  assert.ok(calls.every((call) =>
+    (call.init?.headers as Record<string, string>).authorization === 'Bearer ephemeral'));
 });
 
 test('bound approve and reject helpers always send exact hash and policy bindings', async () => {
-  const bodies: unknown[] = [];
+  const calls: RecordedCall[] = [];
   const fixture = approvalFixture();
   const client = new FiarClient({
     baseUrl: 'http://localhost:3000',
-    fetch: async (_input, init) => {
-      bodies.push(JSON.parse(String(init?.body)) as unknown);
+    fetch: async (input, init) => {
+      calls.push({ input, init });
       return jsonResponse(fixture);
     },
   });
@@ -103,7 +110,7 @@ test('bound approve and reject helpers always send exact hash and policy binding
   await client.approveApproval(fixture, { comment: 'Reviewed' });
   await client.rejectApproval(fixture);
 
-  assert.deepEqual(bodies, [
+  assert.deepEqual(calls.map((call) => JSON.parse(String(call.init?.body)) as unknown), [
     {
       decision: 'approve',
       comment: 'Reviewed',
@@ -117,14 +124,18 @@ test('bound approve and reject helpers always send exact hash and policy binding
       expectedPolicyVersion: fixture.policyVersionId,
     },
   ]);
+  assert.ok(calls.every((call) =>
+    call.input === 'http://localhost:3000/v1/approvals/apr_test/decision' &&
+    call.init?.method === 'POST' &&
+    (call.init.headers as Record<string, string>)['content-type'] === 'application/json'));
 });
 
 test('fetches encoded detail paths', async () => {
-  const urls: string[] = [];
+  const calls: RecordedCall[] = [];
   const client = new FiarClient({
     baseUrl: 'http://localhost:3000',
-    fetch: async (input) => {
-      urls.push(input);
+    fetch: async (input, init) => {
+      calls.push({ input, init });
       return jsonResponse(approvalFixture());
     },
   });
@@ -132,10 +143,35 @@ test('fetches encoded detail paths', async () => {
   await client.getAction('act/unsafe');
   await client.getApproval('apr/unsafe');
 
-  assert.deepEqual(urls, [
+  assert.deepEqual(calls.map((call) => call.input), [
     'http://localhost:3000/v1/actions/act%2Funsafe',
     'http://localhost:3000/v1/approvals/apr%2Funsafe',
   ]);
+  assert.ok(calls.every((call) => call.init?.method === 'GET' && call.init.body === undefined));
+});
+
+test('sends direct approval decisions to the exact gateway route and schema', async () => {
+  const calls: RecordedCall[] = [];
+  const fixture = approvalFixture();
+  const client = new FiarClient({
+    baseUrl: 'http://localhost:3000',
+    fetch: async (input, init) => {
+      calls.push({ input, init });
+      return jsonResponse(fixture);
+    },
+  });
+  const decision = {
+    decision: 'approve' as const,
+    comment: null,
+    expectedRequestHash: fixture.requestHash,
+    expectedPolicyVersion: fixture.policyVersionId,
+  };
+
+  await client.decideApproval('apr/unsafe', decision);
+
+  assert.equal(calls[0]?.input, 'http://localhost:3000/v1/approvals/apr%2Funsafe/decision');
+  assert.equal(calls[0]?.init?.method, 'POST');
+  assert.deepEqual(JSON.parse(String(calls[0]?.init?.body)), decision);
 });
 
 test('throws typed API and transport errors without reflecting credentials', async () => {
@@ -157,5 +193,19 @@ test('throws typed API and transport errors without reflecting credentials', asy
   await assert.rejects(
     transportClient.listApprovals(),
     (error: unknown) => error instanceof FiarTransportError && error.message === 'Unable to reach the Fiar gateway',
+  );
+
+  const responseFailureClient = new FiarClient({
+    baseUrl: 'http://localhost:3000',
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => { throw new Error('response stream failed'); },
+    } as unknown as Response),
+  });
+  await assert.rejects(
+    responseFailureClient.getAction('act_test'),
+    (error: unknown) => error instanceof FiarTransportError &&
+      error.message === 'Unable to read the Fiar gateway response',
   );
 });

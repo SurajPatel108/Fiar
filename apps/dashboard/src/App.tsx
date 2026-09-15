@@ -1,10 +1,15 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Approval, ApprovalDecision } from '../../../packages/sdk/src/index';
-import { createDashboardClient, describeDashboardError } from './api';
+import type { Approval, ApprovalDecision } from '@fiar/sdk';
+import {
+  createDashboardClient,
+  describeDashboardError,
+  describeDecisionError,
+  listAllPendingApprovals,
+} from './api';
 
 interface Notice {
-  kind: 'success' | 'conflict' | 'error';
+  kind: 'success' | 'conflict' | 'expired' | 'error';
   message: string;
 }
 
@@ -21,9 +26,8 @@ function CredentialSetup({ onConnect }: { onConnect: (credential: string) => voi
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const credential = value.trim();
-    if (credential.length > 0) {
-      onConnect(credential);
+    if (value.length > 0) {
+      onConnect(value);
       setValue('');
     }
   }
@@ -45,7 +49,7 @@ function CredentialSetup({ onConnect }: { onConnect: (credential: string) => voi
             spellCheck={false}
             placeholder="Enter a development credential"
           />
-          <button className="button primary" type="submit" disabled={value.trim().length === 0}>Open desk</button>
+          <button className="button primary" type="submit" disabled={value.length === 0}>Open desk</button>
         </form>
         <p className="local-warning">
           Local-only setup. The credential stays in this page's memory, is sent only to the proxied gateway,
@@ -66,29 +70,48 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
   const [confirming, setConfirming] = useState<ApprovalDecision | null>(null);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const listRequest = useRef(0);
+  const detailRequest = useRef(0);
 
   const loadPending = useCallback(async () => {
+    const request = ++listRequest.current;
     setListLoading(true);
     try {
-      const page = await client.listApprovals({ status: 'pending', limit: 100 });
-      setApprovals(page.items);
+      const items = await listAllPendingApprovals(client);
+      if (request === listRequest.current) {
+        setApprovals(items);
+      }
     } catch (error) {
-      setNotice(describeDashboardError(error));
+      if (request === listRequest.current) {
+        setNotice(describeDashboardError(error));
+      }
     } finally {
-      setListLoading(false);
+      if (request === listRequest.current) {
+        setListLoading(false);
+      }
     }
   }, [client]);
 
-  const loadDetail = useCallback(async (approvalId: string) => {
+  const loadDetail = useCallback(async (approvalId: string): Promise<Approval | null> => {
+    const request = ++detailRequest.current;
+    setSelected(null);
     setDetailLoading(true);
     try {
       const approval = await client.getApproval(approvalId);
-      setSelected(approval);
+      if (request === detailRequest.current) {
+        setSelected(approval);
+        return approval;
+      }
     } catch (error) {
-      setNotice(describeDashboardError(error));
+      if (request === detailRequest.current) {
+        setNotice(describeDashboardError(error));
+      }
     } finally {
-      setDetailLoading(false);
+      if (request === detailRequest.current) {
+        setDetailLoading(false);
+      }
     }
+    return null;
   }, [client]);
 
   useEffect(() => {
@@ -97,10 +120,11 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
 
   async function refresh() {
     setNotice(null);
-    await loadPending();
-    if (selected) {
-      await loadDetail(selected.approvalId);
-    }
+    const selectedApprovalId = selected?.approvalId;
+    await Promise.all([
+      loadPending(),
+      ...(selectedApprovalId ? [loadDetail(selectedApprovalId)] : []),
+    ]);
   }
 
   async function confirmDecision() {
@@ -127,11 +151,13 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
       setComment('');
       await loadPending();
     } catch (error) {
-      const described = describeDashboardError(error);
-      setNotice(described);
+      const failedApprovalId = selected.approvalId;
       setConfirming(null);
-      await loadPending();
-      await loadDetail(selected.approvalId);
+      const [, latest] = await Promise.all([
+        loadPending(),
+        loadDetail(failedApprovalId),
+      ]);
+      setNotice(describeDecisionError(error, latest));
     } finally {
       setSubmitting(false);
     }

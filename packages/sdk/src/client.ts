@@ -103,7 +103,15 @@ export class FiarClient {
       throw new FiarTransportError('Unable to reach the Fiar gateway');
     }
 
-    const payload = await readJson(response);
+    let payload: unknown;
+    try {
+      payload = await readJson(response);
+    } catch (error) {
+      if (error instanceof FiarTransportError) {
+        throw error;
+      }
+      throw new FiarTransportError('Unable to read the Fiar gateway response');
+    }
     if (!response.ok) {
       const apiError = isErrorResponse(payload) ? payload : null;
       throw new FiarApiError(

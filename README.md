@@ -75,7 +75,7 @@ docker exec fiar-postgres psql -U fiar -d fiar -c \
 
 The switch prevents new provider calls. A call that crossed the connector boundary before the switch committed is still finalized or reconciled from its durable attempt; Fiar does not discard or guess its outcome.
 
-Run `npm run verify` to execute strict typechecking, Phase 1 regressions, the Phase 2–3 gateway integration suite, the Phase 4 worker suite, SDK tests, and the dashboard typecheck/production build. Integration tests create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
+Run `npm run verify` to execute strict typechecking, Phase 1 regressions, the Phase 2–3 gateway integration suite, the Phase 4 worker suite, SDK and dashboard behavior tests, and the dashboard typecheck/production build. Integration tests create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
 
 The SDK and dashboard are clients only: policy, identity, tenant scope, approval binding, execution, and reconciliation remain server-side. Production authentication/dashboard sessions, a real payment provider, deployment packaging, webhooks, and broader workflows remain deferred. The fake connector cannot execute a real refund.
 

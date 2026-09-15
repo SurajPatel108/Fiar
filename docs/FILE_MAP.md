@@ -54,6 +54,8 @@ apps/
       App.tsx
       api.ts
       styles.css
+    test/
+      api.test.ts
 packages/
   sdk/
     README.md
@@ -137,6 +139,7 @@ infra/
 | apps/dashboard/src/App.tsx | Manager approval workspace | Credential setup, queue, detail, confirmation, decisions | SDK, api | Phase 5 |
 | apps/dashboard/src/api.ts | Dashboard API adapter | Construct SDK client and present safe client errors | SDK | Phase 5 |
 | apps/dashboard/src/styles.css | Dashboard presentation | Responsive manager-facing UI | dashboard components | Phase 5 |
+| apps/dashboard/test/api.test.ts | Dashboard client tests | Complete pagination and stale decision messaging | dashboard API adapter | Phase 5 |
 | packages/sdk/README.md | SDK guide | Agent action submission example and boundary | SDK | Phase 5 |
 | packages/sdk/src/index.ts | SDK entry point | Public exports | client, types | Phase 5 |
 | packages/sdk/src/client.ts | HTTP client | Call gateway, inject caller headers, and map errors | gateway API | Phase 5 |

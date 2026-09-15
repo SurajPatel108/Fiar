@@ -66,6 +66,7 @@ input:focus, textarea:focus { border-color: #247151; box-shadow: 0 0 0 3px rgba(
 .notice { max-width: 1380px; margin: 0 auto 18px; border-radius: 10px; padding: 12px 16px; font-weight: 650; }
 .notice.success { background: #dceee4; color: #18583d; }
 .notice.conflict { background: #fff1cf; color: #73530b; }
+.notice.expired { background: #eee7f8; color: #563c78; }
 .notice.error { background: #f8dfdb; color: #7d3028; }
 
 .workspace { display: grid; grid-template-columns: minmax(320px, 430px) minmax(0, 1fr); gap: 18px; max-width: 1380px; margin: auto; }

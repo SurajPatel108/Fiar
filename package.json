@@ -2,6 +2,9 @@
   "name": "agent-authorization-firewall",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/sdk"
+  ],
   "scripts": {
     "test": "tsx --test packages/shared/test/*.test.ts apps/gateway/test/policy.test.ts",
     "test:shared": "tsx --test packages/shared/test/*.test.ts",
@@ -9,9 +12,10 @@
     "test:integration": "tsx --test apps/gateway/test/actions.test.ts apps/gateway/test/security.test.ts apps/gateway/test/approvals.test.ts",
     "test:worker": "tsx --test apps/worker/test/*.test.ts",
     "test:sdk": "tsx --test packages/sdk/test/*.test.ts",
+    "test:dashboard": "tsx --test apps/dashboard/test/*.test.ts",
     "dashboard:typecheck": "tsc --noEmit -p apps/dashboard/tsconfig.json",
     "dashboard:build": "vite build --config apps/dashboard/vite.config.ts",
-    "dashboard:check": "npm run dashboard:typecheck && npm run dashboard:build",
+    "dashboard:check": "npm run test:dashboard && npm run dashboard:typecheck && npm run dashboard:build",
     "verify": "npm run typecheck && npm test && npm run test:integration && npm run test:worker && npm run test:sdk && npm run dashboard:check",
     "db:setup": "tsx apps/gateway/src/migrate.ts",
     "dev:gateway": "tsx apps/gateway/src/server.ts",

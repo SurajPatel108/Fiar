@@ -336,6 +336,7 @@ Files to create or change:
 - apps/dashboard/src/App.tsx
 - apps/dashboard/src/api.ts
 - apps/dashboard/src/styles.css
+- apps/dashboard/test/api.test.ts
 - apps/dashboard/README.md
 
 Expected behavior:
@@ -361,14 +362,15 @@ Completed deliverables:
 
 - Transport-only `FiarClient` with typed action, approval, pagination, decision, and error contracts.
 - Caller-supplied credential headers and exact-binding approve/reject convenience methods.
-- Five mocked-transport SDK tests covering serialization, URLs, pagination, bindings, API failures, and transport failures.
+- Six mocked-transport SDK tests covering serialization, methods, URLs, pagination, credential headers, bindings, API failures, and transport failures.
 - Responsive Vite/React manager dashboard with a pending queue, safe detail view, confirmation dialog, and explicit success/conflict/error states.
 - In-memory local credential entry and same-origin development proxy; no gateway authorization or execution routes were added.
+- Three dashboard behavior tests covering complete keyset pagination, repeated-cursor protection, and stale decision messaging.
 - Dashboard strict TypeScript check, production build, local startup guide, and manual demo flow.
 
 Verification:
 
-- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 35 Phase 2/3 integration tests, 13 Phase 4 worker tests, 5 SDK tests, and the dashboard typecheck/build.
+- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 35 Phase 2/3 integration tests, 13 Phase 4 worker tests, 6 SDK tests, 3 dashboard behavior tests, and the dashboard typecheck/build.
 
 Limitations:
 
