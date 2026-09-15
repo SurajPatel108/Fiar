@@ -106,6 +106,14 @@ Tradeoff:
 4. Approval requests use the displayed request hash and policy version ID as optimistic exact-binding checks.
 5. The dashboard is deferred because the repository does not yet contain a frontend toolchain.
 
+## Phase 4 decisions
+
+1. The only implemented provider is a deterministic fake backed by a PostgreSQL side-effect ledger; no production or network connector is configured.
+2. Provider idempotency keys are stable `refund:<actionId>` values and are reused for safe retries and reconciliation.
+3. Retryable failures are limited to failures known to occur before a provider result; ambiguous outcomes always require lookup reconciliation.
+4. A tenant kill switch blocks new claims from crossing the provider boundary but does not discard already in-flight outcomes.
+5. Order and budget capacity are reserved transactionally before dispatch, retained during ambiguity, consumed on success, and released after confirmed non-execution or failure.
+
 ## Questions that block later phases
 
 1. What should happen to queued work when a tenant is suspended: keep, cancel, or reconcile to terminal failure?

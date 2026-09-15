@@ -52,6 +52,7 @@ export async function applySchema(pool: Pool): Promise<void> {
       '0002_actions_and_approvals.sql',
       '0003_outbox_and_audit.sql',
       '0004_approval_decisions.sql',
+      '0005_worker_execution.sql',
     ]) {
       if (applied.has(fileName)) {
         continue;
@@ -80,6 +81,9 @@ export async function applySeedData(pool: Pool): Promise<void> {
 export async function resetApplicationData(pool: Pool): Promise<void> {
   await pool.query(`
     truncate table
+      fake_provider_refunds,
+      execution_attempts,
+      execution_reservations,
       audit_events,
       outbox_entries,
       pending_approval_requests,

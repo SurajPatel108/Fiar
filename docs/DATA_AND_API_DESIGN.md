@@ -20,6 +20,7 @@ Important fields:
 - `name`: display label.
 - `status`: active, suspended, or deleted.
 - `created_at`, `updated_at`.
+- `execution_kill_switch_enabled`, reason, and update time.
 
 Constraints:
 
@@ -131,7 +132,7 @@ Important fields:
 - `provider_name`.
 - `provider_idempotency_key`.
 - `attempt_number`.
-- `status`: started, succeeded, failed, unknown, reconciled.
+- `status`: started, succeeded, confirmed failure, retryable failure, pending reconciliation, or a reconciled terminal result.
 - `request_payload_redacted`.
 - `response_payload_redacted`.
 - `started_at`.
@@ -180,7 +181,7 @@ Important fields:
 - `payload`.
 - `lease_owner`.
 - `lease_expires_at`.
-- `status`: ready, leased, dispatched, failed, dead_lettered.
+- `status`: ready, processing, completed, retryable failure, pending reconciliation, or failed.
 - `attempt_count`.
 - `last_error`.
 
@@ -188,6 +189,7 @@ Constraints:
 
 - Exactly one dispatchable outbox item per dispatchable action unless retry semantics intentionally re-use the same row.
 - Leases must expire so crashes can be recovered.
+- Retryable work is bounded by an attempt limit; ambiguous work is never returned directly to ready.
 
 ### Reservation
 
@@ -207,6 +209,11 @@ Constraints:
 
 - Reservation writes are transactional with the action state change that depends on them.
 - Reservations cannot exceed aggregate tenant or order limits.
+- Capacity is decremented when reserved, consumed after confirmed success, released only after confirmed non-execution/failure, and retained while provider outcome is unknown.
+
+### Fake provider ledger
+
+The development connector records one deterministic provider-side result per stable `refund:<actionId>` idempotency key. It exists only to test the connector boundary, duplicate delivery, crash recovery, and reconciliation without a network call or real monetary effect.
 
 ### Audit event
 

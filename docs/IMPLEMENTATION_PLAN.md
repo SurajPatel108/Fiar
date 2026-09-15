@@ -237,6 +237,8 @@ Dashboard status:
 
 Goal: perform durable execution with idempotency, reservation safety, and crash recovery.
 
+Status: complete for the deterministic fake provider boundary.
+
 Tasks:
 
 1. Add the worker process and outbox leasing.
@@ -281,6 +283,26 @@ Verification steps:
 - Simulate a crash immediately after provider success.
 - Suspend the tenant or agent while work is queued and confirm no new dispatch occurs.
 - Simulate an unknown provider response and confirm the attempt stays in pending reconciliation until resolved.
+
+Completed deliverables:
+
+- PostgreSQL-safe outbox claiming with `FOR UPDATE SKIP LOCKED`, leases, expired-lease recovery, and bounded retry attempts.
+- Immediate pre-execution revalidation of tenant, requester, action, approval, policy, kill switch, and exact outbox payload.
+- Transactional order/budget reservations that are consumed on success, released on safe failure, and retained during ambiguity.
+- Provider-neutral refund connector plus a deterministic, durable, idempotent fake provider ledger.
+- Durable execution attempts covering success, confirmed failure, pre-provider retryable failure, and ambiguous outcomes.
+- Reconciliation for confirmed success, confirmed non-execution, confirmed failure, and unresolved outcomes.
+- Redacted worker claim, execution, authorization failure, kill-switch, and reconciliation audit events.
+- Development worker entry point and 13 real PostgreSQL integration scenarios.
+
+Verification:
+
+- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 35 Phase 2/3 integration tests, and 13 Phase 4 worker tests.
+
+Limitations:
+
+- Only the fake provider connector exists; it uses a local PostgreSQL ledger and performs no network or payment operation.
+- Kill-switch administration is intentionally limited to direct local database administration in this phase.
 
 ## Phase 5: SDK and manager UI integration
 

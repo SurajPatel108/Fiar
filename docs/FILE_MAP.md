@@ -1,6 +1,6 @@
 # File Map
 
-This is the MVP file structure. Phase 1, Phase 2, and the Phase 3 backend exist; the dashboard, worker, and SDK remain proposed.
+This is the MVP file structure. Phases 1 through 4 exist for the gateway and deterministic worker; the dashboard, SDK, and production provider remain proposed.
 
 ## Proposed tree
 
@@ -88,6 +88,7 @@ db/
     0002_actions_and_approvals.sql
     0003_outbox_and_audit.sql
     0004_approval_decisions.sql
+    0005_worker_execution.sql
   seeds/
     local-dev.sql
 infra/
@@ -127,7 +128,7 @@ infra/
 | apps/gateway/test/approvals.test.ts | Approval tests | Verify approval transitions and rejection | gateway app, db test harness | Phase 3 |
 | apps/gateway/test/policy.test.ts | Policy tests | Allow/deny/approval boundaries | policy module | Phase 2 |
 | apps/gateway/test/security.test.ts | Security tests | Tenant isolation, idempotency, expiry | gateway app | Phase 2-4 |
-| apps/worker/src/worker.ts | Worker entry | Poll outbox and run jobs | db, connector, outbox | Phase 4 |
+| apps/worker/src/worker.ts | Worker orchestration | Process and reconcile one durable job | db, connector, outbox | Phase 4 |
 | apps/worker/src/outbox.ts | Outbox claiming | Claim, lease, and retry logic | db | Phase 4 |
 | apps/worker/src/connector.ts | Restricted provider integration | Encapsulate provider call and idempotency | server secrets | Phase 4 |
 | apps/worker/src/reconciliation.ts | Ambiguous outcome handling | Resolve crash/retry states | connector, db | Phase 4 |
@@ -166,6 +167,7 @@ infra/
 | db/migrations/0002_actions_and_approvals.sql | Action schema expansion | Canonical request, status, hash, expiry | initial schema | Phase 2-3 |
 | db/migrations/0003_outbox_and_audit.sql | Worker and audit schema | Outbox, reservations, reconciliation | action schema | Phase 2 |
 | db/migrations/0004_approval_decisions.sql | Approval resolution schema | Exact binding, manager decisions, expiry, pagination | action schema | Phase 3 |
+| db/migrations/0005_worker_execution.sql | Worker execution schema | Attempts, reservations, leases, fake ledger, kill switch | action and outbox schema | Phase 4 |
 | db/seeds/local-dev.sql | Local seed data | Demo tenant and fixture records | migrations | Phase 1 |
 | infra/docker/Dockerfile.gateway | Gateway container image | Build/runtime packaging | gateway app | Phase 6 |
 | infra/docker/Dockerfile.worker | Worker container image | Build/runtime packaging | worker app | Phase 6 |

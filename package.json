@@ -7,9 +7,11 @@
     "test:shared": "tsx --test packages/shared/test/*.test.ts",
     "test:policy": "tsx --test apps/gateway/test/policy.test.ts",
     "test:integration": "tsx --test apps/gateway/test/actions.test.ts apps/gateway/test/security.test.ts apps/gateway/test/approvals.test.ts",
-    "verify": "npm run typecheck && npm test && npm run test:integration",
+    "test:worker": "tsx --test apps/worker/test/*.test.ts",
+    "verify": "npm run typecheck && npm test && npm run test:integration && npm run test:worker",
     "db:setup": "tsx apps/gateway/src/migrate.ts",
     "dev:gateway": "tsx apps/gateway/src/server.ts",
+    "dev:worker": "tsx apps/worker/src/server.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

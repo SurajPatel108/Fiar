@@ -182,7 +182,7 @@ Expected outcome:
 | Audit redaction | audit sanitizer tests | event storage tests | secret-in-payload checks |
 | Kill-switch limits | suspension state tests | queued work suspension tests | suspend after dispatch |
 
-Phases 2 and 3 verify tenant-scoped action and approval APIs, default denial, immutable request binding, sequential and concurrent idempotency, concurrent manager decisions, restart durability, expiry and policy-staleness materialization, suspension checks, transaction rollback, pagination validation, and response/audit redaction against real PostgreSQL. Aggregate reservations, provider crash recovery, ambiguous outcomes, and queued-work suspension remain Phase 4 work.
+Phases 2 through 4 verify tenant-scoped action and approval APIs, default denial, immutable request binding, concurrent idempotency and manager decisions, worker leasing, capacity reservations, provider idempotency, crash recovery, ambiguous-outcome reconciliation, kill-switch races, suspension/policy rechecks, transaction rollback, pagination validation, and audit redaction against real PostgreSQL. Production-provider validation and operational hardening remain later work.
 
 ## Required test fixtures
 

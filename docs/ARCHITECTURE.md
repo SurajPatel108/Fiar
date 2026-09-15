@@ -101,14 +101,18 @@ sequenceDiagram
   participant P as Provider
 
   W->>DB: Claim outbox row
-  W->>DB: Re-read authorization and lock budget/order rows
-  W->>DB: Reserve amount and write attempt record
+  W->>DB: Re-read tenant, requester, action, approval, policy, kill switch, and payload
+  W->>DB: Lock capacity, reserve amount, write attempt, and commit lease
   W->>C: Call provider with idempotency key
-  C->>P: Perform refund
+  C->>P: Restricted provider operation (fake ledger locally)
   P-->>C: Success or ambiguous outcome
   C-->>W: Provider response
   W->>DB: Commit completion, failure, or reconciliation state
 ```
+
+The provider call occurs outside the database transaction and only after the claim, authorization re-check, reservation, and attempt record commit. Confirmed pre-provider failures may retry with the same stable key. Ambiguous results and expired processing leases enter `pending_reconciliation`; they are never blindly retried. Reconciliation uses provider lookup to complete, fail, return confirmed non-execution safely to ready, or remain unresolved.
+
+The tenant kill switch is checked inside the claim transaction. Once enabled it blocks new provider calls. A call already in flight may have produced an irreversible provider result, so the worker finishes or reconciles that durable attempt instead of pretending it was canceled.
 
 ## Credential isolation and bypass prevention
 
