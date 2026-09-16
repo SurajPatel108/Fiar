@@ -11,6 +11,22 @@ export function createDashboardClient(credential: string): FiarClient {
   });
 }
 
+export function createSessionDashboardClient(csrfToken: string): FiarClient {
+  return new FiarClient({ baseUrl: '', headers: { 'x-fiar-csrf-token': csrfToken } });
+}
+
+export async function loadManagerSession(): Promise<{ principalType: 'manager' | 'admin'; csrfToken: string } | null> {
+  const response = await fetch('/v1/auth/session', { credentials: 'same-origin', headers: { accept: 'application/json' } });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new FiarTransportError('Unable to load the manager session');
+  return response.json() as Promise<{ principalType: 'manager' | 'admin'; csrfToken: string }>;
+}
+
+export async function logoutManagerSession(csrfToken: string): Promise<void> {
+  const response = await fetch('/v1/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'x-fiar-csrf-token': csrfToken } });
+  if (!response.ok && response.status !== 401) throw new FiarTransportError('Unable to close the manager session');
+}
+
 export async function listAllPendingApprovals(client: ApprovalListClient): Promise<Approval[]> {
   const approvals: Approval[] = [];
   const seenCursors = new Set<string>();

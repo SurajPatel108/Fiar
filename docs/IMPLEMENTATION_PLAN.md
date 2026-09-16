@@ -362,7 +362,7 @@ Completed deliverables:
 
 - Transport-only `FiarClient` with typed action, approval, pagination, decision, and error contracts.
 - Caller-supplied credential headers and exact-binding approve/reject convenience methods.
-- Six mocked-transport SDK tests covering serialization, methods, URLs, pagination, credential headers, bindings, API failures, and transport failures.
+- Seven mocked-transport SDK tests covering serialization, methods, URLs, pagination, development and workload credential headers, bindings, API failures, and transport failures.
 - Responsive Vite/React manager dashboard with a pending queue, safe detail view, confirmation dialog, and explicit success/conflict/error states.
 - In-memory local credential entry and same-origin development proxy; no gateway authorization or execution routes were added.
 - Three dashboard behavior tests covering complete keyset pagination, repeated-cursor protection, and stale decision messaging.
@@ -370,24 +370,24 @@ Completed deliverables:
 
 Verification:
 
-- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 36 Phase 2/3 integration tests, 13 Phase 4 worker tests, 6 SDK tests, 3 dashboard behavior tests, and the dashboard typecheck/build.
+- The Phase 1–5 baseline passes strict TypeScript, 7 unit tests, 35 gateway integration tests, 13 worker tests, 7 SDK tests, 3 dashboard behavior tests, and the dashboard typecheck/build.
 
 Limitations:
 
-- The dashboard credential entry is only for local development; production authentication and managed browser sessions remain Phase 6 work.
-- SDK polling helpers, component/browser automation, dashboard deployment packaging, broader workflows, and a production provider remain deferred.
+- The dashboard credential entry remains local-only; Phase 6 adds the separate production OIDC/session path.
+- SDK polling helpers, broader component/browser automation, broader workflows, and a production provider remain deferred. Dashboard container packaging is delivered by Phase 6.
 
 ## Phase 6: Operational and identity hardening
 
 Goal: make the existing refund MVP deployable for a controlled internal pilot with production-grade identities, secret handling, health signals, recovery, and observability, without adding a real provider.
 
-Status: proposed; not implemented.
+Status: implemented and locally verified; pilot activation is blocked on selecting/registering a real OIDC client and installing deployment secrets. See [PHASE_6_DESIGN.md](PHASE_6_DESIGN.md).
 
 Prerequisites:
 
 - Completed Phases 1–5 and their verification suites.
-- An approved workload-identity and human-session design.
-- A selected secret manager and pilot deployment environment.
+- The workload, OIDC, session, mounted-secret, and operational design recorded in `PHASE_6_DESIGN.md`.
+- A real OIDC provider registration and pilot deployment environment are still required for activation.
 
 Tasks:
 
@@ -404,12 +404,12 @@ Tasks:
 
 Proposed files/components:
 
-- Production authentication adapters and manager session middleware under `apps/gateway/src/`.
-- Secret-manager and credential-lifecycle adapters under a proposed `packages/identity/` boundary.
+- Production authentication, OIDC, session, CSRF, health, metrics, and operator modules under `apps/gateway/src/`.
+- Runtime, mounted-secret, cryptographic, logging, and audit-redaction utilities under `packages/shared/src/`.
 - Gateway and worker health/readiness handlers.
-- `.github/workflows/verify.yml` or the selected CI equivalent.
+- `.github/workflows/verify.yml`.
 - `infra/docker/Dockerfile.gateway`, `Dockerfile.worker`, and `Dockerfile.dashboard`.
-- Pilot compose/deployment manifests and `infra/sql/backup-check.sql` / `health-check.sql`.
+- Pilot/development Compose manifests, guarded recovery scripts, and `infra/sql/backup-check.sql` / `health-check.sql`.
 - Identity, session, redaction, health, restore, and operational failure tests.
 
 Expected behavior:
@@ -434,10 +434,17 @@ Verification steps:
 - Inject database, secret-manager, and dependency failures and verify fail-closed behavior and alerts.
 - Review stored and emitted audit/log samples for secrets.
 
+Completed verification:
+
+- `npm run verify` passes 13 unit tests, 44 gateway integration tests, 13 worker tests, 7 SDK tests, 3 dashboard tests, strict TypeScript, and the production dashboard build (80 tests total, preserving the 65-test Phase 1–5 baseline).
+- The finalized images build reproducibly and run as non-root users; the isolated Compose stack passes migration, liveness/readiness, same-origin proxy, and security-header smoke checks.
+- The guarded backup script restores into a random `fiar_restore_*` database, validates Phase 6 migrations and critical constraints, and removes only that temporary database.
+
 Limitations:
 
 - Phase 6 does not introduce a real refund provider, administrative policy authoring, external fact connectors, or broader action types.
 - The deterministic fake provider remains the only execution connector.
+- A conforming OIDC client is implemented and tested locally, but no external issuer/client is selected or registered; pilot activation remains blocked on that deployment decision.
 
 ## Phase 7: Administration and policy control plane
 

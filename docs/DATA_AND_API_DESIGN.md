@@ -44,6 +44,18 @@ Constraints:
 - Roles are server-derived.
 - A principal may only act within its tenant.
 
+### Phase 6 workload credential
+
+Represents an expiring/revocable agent or service authentication handle. It stores a credential ID, tenant/principal binding, type, keyed HMAC verifier, state, expiry, last-use time, revocation time, and optional replacement lineage. The raw `fiar_<id>_<secret>` value is returned only by the operator CLI and is never stored.
+
+### Human identity and session
+
+`human_identity_mappings` binds a verified OIDC `(issuer, subject)` to an existing tenant-scoped manager/admin. `oidc_login_attempts` holds short-lived, one-use hashed state/nonce plus encrypted PKCE state. `human_sessions` stores only an opaque cookie verifier, tenant/principal binding, absolute/idle expiry, activity, and revocation. Unknown subjects and non-human principal types cannot create sessions.
+
+### Security audit event
+
+Authentication, credential, OIDC, and session lifecycle events use a separate table because failures may not have a known action or tenant. Payloads are event-allowlisted and cannot contain submitted token material, cookies, session identifiers, CSRF values, OIDC tokens/codes, verifiers, peppers, client/provider secrets, or credential-bearing database URLs.
+
 ### Action
 
 Represents one immutable business request, initially scoped to the refund workflow.
@@ -373,6 +385,18 @@ Errors:
 
 Approval locks the approval and action rows, rechecks active tenant/manager/requester authority and the active policy, and records the decision atomically. Approval moves the action directly to `queued` and creates one outbox row; rejection moves it to `denied` and creates no outbox work. A queued action has not executed and no funds are reserved in Phase 3.
 
+## Phase 6 authentication and operations API
+
+- `GET /v1/auth/oidc/start` creates one-use state/nonce/PKCE state and redirects to the configured OIDC authorization endpoint.
+- `GET /v1/auth/oidc/callback` consumes state, exchanges the code, verifies the signed ID token and existing human mapping, creates a server-side session, and redirects only to the configured dashboard URI.
+- `GET /v1/auth/session` authenticates the opaque cookie and returns only principal type plus a short-lived session-bound CSRF token.
+- `POST /v1/auth/logout` requires session, CSRF, Origin, and Host validation; it revokes the session and clears the cookie.
+- `GET /health/live` is dependency-independent process liveness.
+- `GET /health/ready` returns safe required-component states and `503` when a required dependency is unavailable.
+- `GET /metrics` returns bounded Prometheus metrics only after separate metrics authentication.
+
+Production action calls accept `Authorization: Bearer fiar_<credential-id>_<random-secret>` for active agent/service credentials. Approval routes accept manager/admin sessions. Development headers remain limited to explicit development/test runtime modes. No Phase 6 route creates tenants, principals, policies, identity mappings, or credentials.
+
 ## Proposed later endpoints (not implemented)
 
 The following illustrate the future Phase 7 administration boundary. Their exact contracts must be designed and security-reviewed before implementation.
@@ -426,4 +450,4 @@ Errors should be deterministic and not reveal cross-tenant details.
 
 ## Future data and integration boundaries (not implemented)
 
-Phases 7 through 10 propose administrative models for agent/tool/resource limits and policy lifecycle; canonical fact declarations with provenance, source version, retrieval time, and maximum age; connector health; sandbox-provider credentials and reconciliation; and onboarding state. None of those schemas, APIs, connectors, or UIs are implemented by the Phase 1–5 refund prototype. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the staged plan rather than treating this section as a current API contract.
+Phases 7 through 10 propose administrative models for agent/tool/resource limits and policy lifecycle; canonical fact declarations with provenance, source version, retrieval time, and maximum age; external connector health; sandbox-provider credentials and reconciliation; and onboarding state. None of those schemas, APIs, connectors, or UIs are implemented by the Phase 1–6 refund system. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the staged plan rather than treating this section as a current API contract.

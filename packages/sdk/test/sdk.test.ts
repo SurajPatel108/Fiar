@@ -73,6 +73,20 @@ test('submits the exact gateway action schema with caller credentials', async ()
   assert.equal(headers['content-type'], 'application/json');
 });
 
+test('sends an explicit production workload credential as a bearer token', async () => {
+  const calls: RecordedCall[] = [];
+  const client = new FiarClient({
+    baseUrl: 'https://fiar.example',
+    workloadCredential: 'fiar_wcr_identifier_secret',
+    fetch: async (input, init) => { calls.push({ input, init }); return jsonResponse({ actionId: 'act_test' }); },
+  });
+  await client.getAction('act_test');
+  const headers = calls[0]?.init?.headers as Record<string, string>;
+  assert.equal(headers.authorization, 'Bearer fiar_wcr_identifier_secret');
+  assert.equal(headers['x-fiar-dev-credential'], undefined);
+  assert.throws(() => new FiarClient({ baseUrl: '', credential: 'dev', workloadCredential: 'workload' }), /either/);
+});
+
 test('constructs action and approval list pagination without undefined fields', async () => {
   const urls: string[] = [];
   const calls: RecordedCall[] = [];

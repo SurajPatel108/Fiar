@@ -1,6 +1,6 @@
 # Fiar Manager Dashboard
 
-This is a local-development manager client for the existing gateway approval APIs. It cannot execute refunds, call the provider, change policy, administer the kill switch, or bypass server-side authorization.
+This is the manager client for the existing gateway approval APIs. It cannot execute refunds, call the provider, change policy, administer the kill switch, or bypass server-side authorization.
 
 ## Start
 
@@ -17,6 +17,12 @@ Vite proxies `/v1` to `http://127.0.0.1:3000`. To use another local gateway port
 ```sh
 FIAR_DASHBOARD_GATEWAY_URL=http://127.0.0.1:3100 npm run dev:dashboard
 ```
+
+## Production session mode
+
+The production build removes raw credential entry. It loads `GET /v1/auth/session`, redirects unauthenticated users through `/v1/auth/oidc/start`, uses the server-managed `HttpOnly` session cookie, and holds the returned CSRF token only in React memory. Decisions and logout send that token; tenant, role, approval binding, and authorization remain enforced by the gateway.
+
+The dashboard must be served from the configured same origin through the supplied Nginx proxy. It never writes authentication material to localStorage or sessionStorage. A real OIDC client registration is required before pilot activation.
 
 ## Manual test
 

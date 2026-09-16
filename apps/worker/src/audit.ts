@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
 import { createId } from '../../../packages/shared/src/ids';
+import { sanitizeAuditPayload } from '../../../packages/shared/src/audit-redaction';
 
 export interface WorkerAuditInput {
   tenantId: string;
@@ -24,6 +25,9 @@ export interface WorkerAuditInput {
 }
 
 export async function insertWorkerAuditEvent(client: PoolClient, input: WorkerAuditInput): Promise<void> {
+  const payload = sanitizeAuditPayload(input.payload, new Set([
+    'outboxId', 'attemptId', 'attemptNumber', 'actionStatus',
+  ]));
   await client.query(
     `
       insert into audit_events (
@@ -39,7 +43,7 @@ export async function insertWorkerAuditEvent(client: PoolClient, input: WorkerAu
       input.requestHash,
       input.outcome,
       input.reason,
-      JSON.stringify(input.payload),
+      JSON.stringify(payload),
       randomUUID(),
     ],
   );

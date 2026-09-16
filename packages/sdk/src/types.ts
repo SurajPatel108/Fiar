@@ -119,6 +119,8 @@ export type FetchTransport = (
 export interface FiarClientOptions {
   baseUrl: string;
   credential?: string;
+  /** Production workload bearer token. Mutually exclusive with `credential`. */
+  workloadCredential?: string;
   credentialHeader?: string;
   headers?: CredentialHeaders;
   getCredentialHeaders?: CredentialHeaderProvider;

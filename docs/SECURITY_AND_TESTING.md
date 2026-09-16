@@ -197,8 +197,11 @@ Expected outcome:
 | Ambiguous outcomes | reconciliation state tests | provider timeout tests | lost response simulation |
 | Audit redaction | audit sanitizer tests | event storage tests | secret-in-payload checks |
 | Kill-switch limits | suspension state tests | queued work suspension tests | suspend after dispatch |
+| Runtime/auth separation | mode/config tests | production dev-header and workload tests | missing/revoked/expired authority |
+| Human sessions | CSRF/HMAC tests | OIDC, cookie, logout, expiry, role tests | replay and cross-session CSRF |
+| Operational safety | secret/audit/metric tests | live/ready/metrics tests | dependency and shutdown failures |
 
-Phases 2 through 4 verify tenant-scoped action and approval APIs, default denial, immutable request binding, concurrent idempotency and manager decisions, worker leasing, capacity reservations, provider idempotency, crash recovery, ambiguous-outcome reconciliation, kill-switch races, suspension/policy rechecks, transaction rollback, pagination validation, and audit redaction against real PostgreSQL. Production-provider validation and operational hardening remain later work.
+Phases 2 through 4 verify tenant-scoped action and approval APIs, default denial, immutable request binding, concurrent idempotency and manager decisions, worker leasing, capacity reservations, provider idempotency, crash recovery, ambiguous-outcome reconciliation, kill-switch races, suspension/policy rechecks, transaction rollback, pagination validation, and audit redaction against real PostgreSQL. Phase 6 adds production-mode isolation, HMAC workload credentials, generic OIDC/PKCE, managed sessions, CSRF, mounted secrets, audit allowlists, health/readiness, protected metrics, packaging, and isolated restore verification. Real-provider validation remains later work.
 
 ## Required test fixtures
 
@@ -212,11 +215,15 @@ Phases 2 through 4 verify tenant-scoped action and approval APIs, default denial
 
 ## Phase 5 client verification
 
-The Phase 5 SDK and dashboard remain untrusted clients. SDK tests verify exact request serialization, bound approval fields, caller-provided headers, and typed failure handling. Dashboard tests verify complete cursor traversal and stale decision messaging in addition to strict typechecking and a production build; its local manager credential exists only in page memory and all authorization remains at the gateway. Browser automation and production session-security testing remain deferred.
+The Phase 5 SDK and dashboard remain untrusted clients. SDK tests verify exact request serialization, workload bearer and caller-provided headers, bound approval fields, and typed failure handling. Dashboard tests verify complete cursor traversal and stale decision messaging in addition to strict typechecking and a production build. Development credentials remain only in page memory; the production build uses the Phase 6 server session and CSRF flow. Browser session protocol tests run at the gateway boundary; full browser automation against a selected external IdP remains part of pilot activation.
+
+## Phase 6 security verification
+
+Phase 6 tests reject development credentials in production; cover valid, malformed, unknown, expired, revoked, rotated, and suspended workload authority; exercise OIDC discovery/PKCE/JWKS/issuer/audience/signature/nonce/state behavior; verify session, CSRF, cookie, logout, and role boundaries; validate mounted-secret errors and audit redaction; and test safe health and metrics behavior. Container, Compose, hygiene, and isolated restore checks are separate verification gates. A real OIDC registration is still required before pilot activation.
 
 ## Future-phase security verification (not implemented)
 
-Phases 6–10 add production identity/session tests, credential rotation and revocation, administrative authorization and policy simulation, trusted-fact provenance/freshness checks, sandbox-provider reconciliation and shutdown tests, and onboarding/shadow-mode validation. These future checks do not imply that production authentication, generic policy authoring, external fact connectors, or a real provider exist today.
+Phases 7–10 add administrative authorization and policy simulation, trusted-fact provenance/freshness checks, sandbox-provider reconciliation and shutdown tests, and onboarding/shadow-mode validation. These future checks do not imply that generic policy authoring, external fact connectors, or a real provider exist today.
 
 ## Non-goals for testing the MVP
 

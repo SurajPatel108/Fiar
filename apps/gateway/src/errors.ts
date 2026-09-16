@@ -11,6 +11,8 @@ export function mapDomainErrorToStatusCode(error: DomainError): number {
       return 401;
     case 'FORBIDDEN':
       return 403;
+    case 'RATE_LIMITED':
+      return 429;
     case 'NOT_FOUND':
       return 404;
     case 'CONFLICT':

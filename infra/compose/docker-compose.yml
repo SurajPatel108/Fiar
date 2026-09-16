@@ -1,15 +1,110 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: fiar-postgres
     environment:
       POSTGRES_DB: fiar
       POSTGRES_USER: fiar
-      POSTGRES_PASSWORD: fiar
-    ports:
-      - "5432:5432"
-    volumes:
-      - fiar-postgres-data:/var/lib/postgresql/data
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes: [fiar-postgres-data:/var/lib/postgresql/data]
+    networks: [fiar-internal]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U fiar -d fiar"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.gateway
+    command: [node, dist/gateway/migrate.js]
+    environment:
+      FIAR_RUNTIME_MODE: production
+      FIAR_DATABASE_URL_FILE: /run/secrets/database_url
+    secrets: [database_url]
+    networks: [fiar-internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.gateway
+    environment:
+      FIAR_RUNTIME_MODE: production
+      FIAR_AUTO_MIGRATE: "false"
+      FIAR_GATEWAY_HOST: 0.0.0.0
+      FIAR_PUBLIC_ORIGIN: ${FIAR_PUBLIC_ORIGIN:-https://fiar.example.invalid}
+      FIAR_ALLOWED_HOST: ${FIAR_ALLOWED_HOST:-fiar.example.invalid}
+      FIAR_OIDC_ISSUER: ${FIAR_OIDC_ISSUER:-https://identity.example.invalid}
+      FIAR_OIDC_CLIENT_ID: ${FIAR_OIDC_CLIENT_ID:-replace-me}
+      FIAR_OIDC_AUDIENCE: ${FIAR_OIDC_AUDIENCE:-replace-me}
+      FIAR_OIDC_REDIRECT_URI: ${FIAR_OIDC_REDIRECT_URI:-https://fiar.example.invalid/v1/auth/oidc/callback}
+      FIAR_DATABASE_URL_FILE: /run/secrets/database_url
+      FIAR_CREDENTIAL_PEPPER_FILE: /run/secrets/credential_pepper
+      FIAR_SESSION_PEPPER_FILE: /run/secrets/session_pepper
+      FIAR_CSRF_KEY_FILE: /run/secrets/csrf_key
+      FIAR_OIDC_STATE_KEY_FILE: /run/secrets/oidc_state_key
+      FIAR_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+      FIAR_METRICS_TOKEN_FILE: /run/secrets/metrics_token
+    secrets: [database_url, credential_pepper, session_pepper, csrf_key, oidc_state_key, oidc_client_secret, metrics_token]
+    networks: [fiar-internal, fiar-egress]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    environment:
+      FIAR_RUNTIME_MODE: production
+      FIAR_AUTO_MIGRATE: "false"
+      FIAR_WORKER_HEALTH_HOST: 0.0.0.0
+      FIAR_DATABASE_URL_FILE: /run/secrets/database_url
+      FIAR_METRICS_TOKEN_FILE: /run/secrets/metrics_token
+    secrets: [database_url, metrics_token]
+    networks: [fiar-internal]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.dashboard
+      args: { VITE_FIAR_DASHBOARD_MODE: production }
+    ports: ["${FIAR_DASHBOARD_PORT:-8080}:8080"]
+    networks: [fiar-internal, fiar-published]
+    depends_on:
+      gateway: { condition: service_healthy }
+    read_only: true
+    tmpfs:
+      - /tmp:uid=101,gid=101,mode=0750
+    restart: unless-stopped
+
+networks:
+  fiar-internal:
+    internal: true
+  fiar-egress: {}
+  fiar-published: {}
 
 volumes:
   fiar-postgres-data:
+
+secrets:
+  postgres_password: { file: "${FIAR_POSTGRES_PASSWORD_FILE:?FIAR_POSTGRES_PASSWORD_FILE is required}" }
+  database_url: { file: "${FIAR_DATABASE_URL_FILE:?FIAR_DATABASE_URL_FILE is required}" }
+  credential_pepper: { file: "${FIAR_CREDENTIAL_PEPPER_FILE:?FIAR_CREDENTIAL_PEPPER_FILE is required}" }
+  session_pepper: { file: "${FIAR_SESSION_PEPPER_FILE:?FIAR_SESSION_PEPPER_FILE is required}" }
+  csrf_key: { file: "${FIAR_CSRF_KEY_FILE:?FIAR_CSRF_KEY_FILE is required}" }
+  oidc_state_key: { file: "${FIAR_OIDC_STATE_KEY_FILE:?FIAR_OIDC_STATE_KEY_FILE is required}" }
+  oidc_client_secret: { file: "${FIAR_OIDC_CLIENT_SECRET_FILE:?FIAR_OIDC_CLIENT_SECRET_FILE is required}" }
+  metrics_token: { file: "${FIAR_METRICS_TOKEN_FILE:?FIAR_METRICS_TOKEN_FILE is required}" }

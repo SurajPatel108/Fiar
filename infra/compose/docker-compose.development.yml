@@ -1,0 +1,30 @@
+services:
+  postgres:
+    ports: ["${FIAR_COMPOSE_POSTGRES_PORT:-5432}:5432"]
+    networks: [fiar-internal, fiar-published]
+  migrate:
+    environment:
+      FIAR_RUNTIME_MODE: development
+      FIAR_DATABASE_URL: postgresql://fiar:fiar@postgres:5432/fiar
+  gateway:
+    env_file: ["${FIAR_DEV_ENV_FILE:-./.env.development.local}"]
+    environment:
+      FIAR_RUNTIME_MODE: development
+      FIAR_AUTO_MIGRATE: "true"
+      FIAR_DATABASE_URL: postgresql://fiar:fiar@postgres:5432/fiar
+      FIAR_PUBLIC_ORIGIN: http://127.0.0.1:8080
+      FIAR_ALLOWED_HOST: 127.0.0.1:8080
+      FIAR_OIDC_ISSUER: ""
+      FIAR_SECRET_METRICS_TOKEN: local-metrics-only
+    ports: ["${FIAR_COMPOSE_GATEWAY_PORT:-3000}:3000"]
+  worker:
+    environment:
+      FIAR_RUNTIME_MODE: development
+      FIAR_AUTO_MIGRATE: "true"
+      FIAR_DATABASE_URL: postgresql://fiar:fiar@postgres:5432/fiar
+      FIAR_SECRET_METRICS_TOKEN: local-metrics-only
+    ports: ["${FIAR_COMPOSE_WORKER_PORT:-3001}:3001"]
+    networks: [fiar-internal, fiar-published]
+  dashboard:
+    build:
+      args: { VITE_FIAR_DASHBOARD_MODE: development }

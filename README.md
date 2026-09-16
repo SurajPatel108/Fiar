@@ -1,6 +1,6 @@
 # Agent Authorization Firewall
 
-This repository contains the completed Phase 1 policy prototype, Phase 2 authenticated gateway intake, Phase 3 human approval API, Phase 4 controlled execution worker, and Phase 5 TypeScript SDK and local manager dashboard.
+This repository contains the completed and verified Phase 1–5 refund firewall plus the locally verified Phase 6 identity and operational hardening layer. Pilot activation still requires a real OIDC client registration and operator-installed deployment secrets.
 
 The implemented backend is a constrained authorization firewall for AI agents: a TypeScript/Fastify/PostgreSQL system that decides whether an agent action may execute, requires human approval for selected actions, and then dispatches work through a background worker with durable state and auditability. The paper’s narrow starting point is the refund workflow, and this plan keeps that as the first implementation slice.
 
@@ -13,6 +13,7 @@ The implemented backend is a constrained authorization firewall for AI agents: a
 5. [docs/SECURITY_AND_TESTING.md](docs/SECURITY_AND_TESTING.md) for invariants and test coverage.
 6. [docs/DECISIONS_AND_QUESTIONS.md](docs/DECISIONS_AND_QUESTIONS.md) for assumptions, tradeoffs, and blockers.
 7. [docs/FILE_MAP.md](docs/FILE_MAP.md) for implemented files and clearly labeled future components.
+8. [docs/PHASE_6_DESIGN.md](docs/PHASE_6_DESIGN.md) for production identity, sessions, secrets, health, metrics, packaging, and recovery decisions.
 
 ## Initial scope
 
@@ -26,13 +27,15 @@ The MVP starts with the refund authorization flow described in the paper:
 
 The gateway accepts authenticated refund actions and managers can resolve exact tenant-scoped approvals. The Phase 4 worker leases queued work, rechecks authorization, reserves capacity, and calls only a narrow provider connector. The default connector is a deterministic PostgreSQL-backed fake: it makes no network calls and moves no real money.
 
-## Local Phase 5 startup
+## Local development startup
 
 Prerequisites: Node.js with npm and Docker with Compose.
 
 ```sh
 npm install
-docker compose -f infra/compose/docker-compose.yml up -d postgres
+cp infra/compose/.env.development.example infra/compose/.env.development.local
+docker compose --env-file infra/compose/.env.development.local -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.development.yml up -d postgres
+FIAR_RUNTIME_MODE=development \
 FIAR_DATABASE_URL=postgresql://fiar:fiar@127.0.0.1:5432/fiar npm run db:setup
 FIAR_RUNTIME_MODE=development \
 FIAR_DATABASE_URL=postgresql://fiar:fiar@127.0.0.1:5432/fiar \
@@ -58,6 +61,32 @@ Open `http://127.0.0.1:5173`. Enter the configured local manager credential when
 
 The example credentials are supplied only through the local process environment and are not stored by the seed. Submit the appropriate token in the `x-fiar-dev-credential` header. The development credential adapter refuses to start unless `FIAR_RUNTIME_MODE=development`; it is not a production authentication mechanism.
 
+The ignored `.env.development.local` file supplies the obvious local-only credentials to the development override. The complete containerized development stack uses those credentials and the fake provider:
+
+```sh
+docker compose --env-file infra/compose/.env.development.local -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.development.yml up --build
+```
+
+In production mode, agents/services use SDK bearer credentials created by the local operator CLI, while managers/admins use OIDC and PostgreSQL-backed sessions. Production rejects development credential configuration and headers. Safe operational endpoints are `/health/live`, `/health/ready`, and the separately authenticated `/metrics`; metrics remain internal in Compose.
+
+## Production-like pilot packaging
+
+Copy `infra/compose/.env.example` to an ignored `.env.production.local` file and copy each `infra/compose/secrets/*.example` to operator-controlled paths; replace every placeholder with an independently generated value; register the exact HTTPS OIDC callback; and point the Compose secret variables at those files. A public OIDC client may use a safe, empty regular file for the optional client-secret path. Then run:
+
+```sh
+docker compose --env-file infra/compose/.env.production.local -f infra/compose/docker-compose.yml config
+docker compose --env-file infra/compose/.env.production.local -f infra/compose/docker-compose.yml up --build
+```
+
+The checked-in examples are not pilot secrets. Until an external issuer/client and final callback origin are selected and verified, Phase 6 is not an activated pilot deployment. Credential lifecycle and secret names are documented in [docs/PHASE_6_DESIGN.md](docs/PHASE_6_DESIGN.md).
+
+Backup verification always restores into a temporary `fiar_restore_*` database:
+
+```sh
+FIAR_DATABASE_URL='postgresql://…/fiar' FIAR_BACKUP_FILE=/absolute/path/fiar.backup infra/scripts/backup.sh
+FIAR_ADMIN_DATABASE_URL='postgresql://…/postgres' FIAR_BACKUP_FILE=/absolute/path/fiar.backup infra/scripts/restore-verify.sh
+```
+
 Applications can submit actions through the transport-only TypeScript client in `packages/sdk`; see [packages/sdk/README.md](packages/sdk/README.md). After creating an approval-required action, inspect and decide it in the dashboard. The equivalent raw HTTP decision remains:
 
 ```sh
@@ -78,7 +107,7 @@ The switch prevents new provider calls. A call that crossed the connector bounda
 
 Run `npm run verify` to execute strict typechecking, Phase 1 regressions, the Phase 2–3 gateway integration suite, the Phase 4 worker suite, SDK and dashboard behavior tests, and the dashboard typecheck/production build. Integration tests create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
 
-The SDK and dashboard are clients only: policy, identity, tenant scope, approval binding, execution, and reconciliation remain server-side. Production authentication/dashboard sessions, a real payment provider, deployment packaging, webhooks, and broader workflows remain deferred. The fake connector cannot execute a real refund.
+The SDK and dashboard remain clients only: policy, identity, tenant scope, approval binding, execution, and reconciliation are server-side. A real payment provider, external fact connectors, policy administration, webhooks, and broader workflows remain deferred. The fake connector cannot execute a real refund.
 
 ## Notes on the paper
 

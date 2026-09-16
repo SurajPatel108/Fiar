@@ -142,10 +142,16 @@ The implementation should be layered in this order:
 4. Approval state transitions.
 5. Worker reservation and reconciliation.
 6. SDK and React dashboard.
-7. Hardening, metrics, and deployment.
+7. Production identity, managed sessions, hardening, metrics, recovery, and deployment packaging.
 
-## Future target architecture (not implemented)
+## Phase 6 identity and operations
 
-The long-term design adds distinct identity/session infrastructure, an administrative policy control plane, a provider-neutral trusted `FactResolver`, controlled external fact connectors, one selected refund-provider sandbox, and guided organization onboarding. These are proposed Phases 6 through 10, not current runtime components. See [PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md](PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md) for the target experience and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for prerequisites and acceptance criteria.
+Production workload requests use opaque bearer credentials whose secrets are never stored. Managers/admins authenticate through provider-neutral OIDC Authorization Code + PKCE and receive PostgreSQL-backed opaque sessions. Development credentials are structurally excluded from production. Session-bound CSRF, same-origin validation, mounted secrets, centralized audit allowlists, liveness/readiness, protected metrics, non-root images, recovery checks, and bounded shutdown complete the local Phase 6 boundary. See [PHASE_6_DESIGN.md](PHASE_6_DESIGN.md).
 
-Until those phases are delivered, authentication remains explicitly development-only, order facts remain PostgreSQL fixtures controlled by the server, the worker uses only its deterministic fake provider, policy authoring is not exposed, and there is no onboarding or administrative UI.
+The production dashboard and gateway are same-origin through the packaged Nginx proxy. Gateway OIDC traffic has controlled egress; PostgreSQL and the fake-provider worker remain internal. Only the dashboard port is published in the pilot topology.
+
+## Future target architecture (Phases 7–10; not implemented)
+
+The remaining long-term design adds an administrative policy control plane, a provider-neutral trusted `FactResolver`, controlled external fact connectors, one selected refund-provider sandbox, and guided organization onboarding. These are proposed Phases 7 through 10, not current runtime components. See [PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md](PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md) for the target experience and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for prerequisites and acceptance criteria.
+
+Phase 6 provides generic production authentication boundaries, but a real OIDC registration is still required for pilot activation. Order facts remain PostgreSQL fixtures controlled by the server, the worker uses only its deterministic fake provider, policy authoring is not exposed, and there is no onboarding or administrative UI.

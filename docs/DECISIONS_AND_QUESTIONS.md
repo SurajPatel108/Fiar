@@ -104,7 +104,7 @@ Tradeoff:
 2. Manager approval atomically moves an action from `awaiting_approval` to `queued`; manager rejection moves it to `denied`.
 3. Expired, policy-stale, or requester-suspended approvals are durably resolved as `expired` on manager reads or decision attempts.
 4. Approval requests use the displayed request hash and policy version ID as optimistic exact-binding checks.
-5. Phase 5 adds a local-only Vite/React dashboard; production authentication and managed browser sessions remain deferred.
+5. Phase 5 added a local-only Vite/React dashboard; Phase 6 retains that development mode and adds the production OIDC/session path.
 
 ## Phase 4 decisions
 
@@ -122,10 +122,23 @@ Tradeoff:
 3. The future `FactResolver` must fail closed for missing or stale decisive facts and must not accept agent assertions as authoritative replacements.
 4. The deterministic fake provider remains the test default even after a sandbox connector is selected.
 
+## Phase 6 decisions
+
+1. Runtime mode is mandatory. Production rejects development credential configuration and headers rather than treating them as a fallback.
+2. Agents/services use opaque bearer credentials with keyed HMAC-SHA-256 verifiers; raw secrets are returned once by an operator CLI and never stored.
+3. Managers/admins use generic OIDC Authorization Code + PKCE mapped to existing principals. Fiar does not create privileged users on first login and does not maintain passwords.
+4. Browser sessions are opaque, PostgreSQL-backed, idle/absolute-expiring, revocable, and bound to strict cookies plus HMAC CSRF and same-origin checks.
+5. Production secrets use mounted files through a provider-neutral interface. No cloud-specific secret manager is claimed.
+6. Authentication throttles and counters are process-local for the single-instance pilot; distributed enforcement remains a later scaling concern.
+7. The deterministic PostgreSQL fake connector is permitted in the production runtime profile solely for a no-money controlled pilot.
+8. Production processes verify schema state; a one-shot migration job applies forward migrations.
+9. A selected/registered external OIDC client, exact HTTPS origin, and installed deployment secrets are blockers to pilot activation, not blockers to locally verifying the provider-neutral implementation.
+
 ## Questions that block later phases
 
-1. What should happen to queued work when a tenant is suspended: keep, cancel, or reconcile to terminal failure?
-2. Which refund-provider sandbox should Phase 9 target, and what idempotency, lookup, webhook, credential-scope, rate-limit, and failure-injection guarantees does it provide?
+1. Which OIDC issuer/client registration and final HTTPS callback origin will activate the controlled pilot?
+2. What should happen to queued work when a tenant is suspended: keep, cancel, or reconcile to terminal failure?
+3. Which refund-provider sandbox should Phase 9 target, and what idempotency, lookup, webhook, credential-scope, rate-limit, and failure-injection guarantees does it provide?
 
 ## Questions that can wait
 

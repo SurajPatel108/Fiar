@@ -1,0 +1,72 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: fiar
+          POSTGRES_USER: fiar
+          POSTGRES_PASSWORD: fiar
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U fiar -d fiar"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: cp infra/compose/.env.development.example infra/compose/.env.development.local
+      - run: npm run hygiene
+      - run: npm run links
+      - run: npm run verify
+      - run: npm run build:servers
+      - run: docker compose --env-file infra/compose/.env.development.local -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.development.yml config --quiet
+      - run: docker build -f infra/docker/Dockerfile.gateway -t fiar-gateway:test .
+      - run: docker build -f infra/docker/Dockerfile.worker -t fiar-worker:test .
+      - run: docker build -f infra/docker/Dockerfile.dashboard -t fiar-dashboard:test .
+      - name: Verify non-root images
+        run: |
+          test "$(docker inspect --format '{{.Config.User}}' fiar-gateway:test)" = node
+          test "$(docker inspect --format '{{.Config.User}}' fiar-worker:test)" = node
+          test "$(docker inspect --format '{{.Config.User}}' fiar-dashboard:test)" = nginx
+      - name: Compose development smoke test
+        env:
+          FIAR_COMPOSE_POSTGRES_PORT: 55432
+        run: |
+          docker compose --env-file infra/compose/.env.development.local -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.development.yml up -d --build
+          for attempt in $(seq 1 30); do curl --fail --silent http://127.0.0.1:8080/health/live && break; sleep 2; done
+          curl --fail --silent http://127.0.0.1:3000/health/ready
+          curl --fail --silent http://127.0.0.1:3001/health/ready
+      - name: Backup and isolated restore
+        env:
+          PGPASSWORD: fiar
+          FIAR_RUNTIME_MODE: development
+          FIAR_DATABASE_URL: postgresql://fiar:fiar@127.0.0.1:5432/fiar
+          FIAR_ADMIN_DATABASE_URL: postgresql://fiar:fiar@127.0.0.1:5432/postgres
+          FIAR_BACKUP_FILE: /tmp/fiar-ci.backup
+        run: |
+          npm run db:setup
+          infra/scripts/backup.sh
+          infra/scripts/restore-verify.sh
+      - if: always()
+        env:
+          FIAR_COMPOSE_POSTGRES_PORT: 55432
+        run: docker compose --env-file infra/compose/.env.development.local -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.development.yml down

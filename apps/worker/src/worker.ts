@@ -13,8 +13,8 @@ export interface ExecutionWorkerOptions {
 }
 
 export type ProcessOneResult =
-  | { kind: 'executed'; actionId: string }
-  | { kind: 'pending_reconciliation'; actionId?: string }
+  | { kind: 'executed'; actionId: string; outcome: 'CONFIRMED_SUCCESS' | 'CONFIRMED_FAILURE' | 'RETRYABLE_FAILURE' }
+  | { kind: 'pending_reconciliation'; actionId?: string; outcome?: 'AMBIGUOUS' }
   | { kind: 'blocked'; reason: string }
   | { kind: 'none' };
 
@@ -67,8 +67,8 @@ export class ExecutionWorker {
     }
     await finalizeExecution(this.pool, claim.execution, providerResult, this.maxAttempts);
     return providerResult.outcome === 'ambiguous'
-      ? { kind: 'pending_reconciliation', actionId: claim.execution.actionId }
-      : { kind: 'executed', actionId: claim.execution.actionId };
+      ? { kind: 'pending_reconciliation', actionId: claim.execution.actionId, outcome: 'AMBIGUOUS' }
+      : { kind: 'executed', actionId: claim.execution.actionId, outcome: providerResult.outcome.toUpperCase() as 'CONFIRMED_SUCCESS' | 'CONFIRMED_FAILURE' | 'RETRYABLE_FAILURE' };
   }
 
   async reconcileOne(): Promise<ReconciliationResult> {

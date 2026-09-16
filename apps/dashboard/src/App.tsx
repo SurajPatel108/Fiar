@@ -1,12 +1,16 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Approval, ApprovalDecision } from '@fiar/sdk';
+import { FiarApiError, type Approval, type ApprovalDecision } from '@fiar/sdk';
 import {
   createDashboardClient,
+  createSessionDashboardClient,
   describeDashboardError,
   describeDecisionError,
   listAllPendingApprovals,
+  loadManagerSession,
+  logoutManagerSession,
 } from './api';
+import type { FiarClient } from '@fiar/sdk';
 
 interface Notice {
   kind: 'success' | 'conflict' | 'expired' | 'error';
@@ -14,11 +18,36 @@ interface Notice {
 }
 
 export function App() {
-  const [credential, setCredential] = useState<string | null>(null);
+  return import.meta.env.DEV || import.meta.env.VITE_FIAR_DASHBOARD_MODE === 'development'
+    ? <DevelopmentApp /> : <ProductionApp />;
+}
 
+function DevelopmentApp() {
+  const [credential, setCredential] = useState<string | null>(null);
   return credential === null
     ? <CredentialSetup onConnect={setCredential} />
-    : <ApprovalDesk credential={credential} onDisconnect={() => setCredential(null)} />;
+    : <ApprovalDesk client={createDashboardClient(credential)} onDisconnect={() => setCredential(null)} />;
+}
+
+function ProductionApp() {
+  const [session, setSession] = useState<{ principalType: 'manager' | 'admin'; csrfToken: string } | null | undefined>(undefined);
+  const [failed, setFailed] = useState(false);
+  const refreshSession = useCallback(async () => {
+    const current = await loadManagerSession();
+    setSession(current);
+  }, []);
+  useEffect(() => { void loadManagerSession().then(setSession).catch(() => setFailed(true)); }, []);
+  if (failed) return <main className="setup-shell"><section className="setup-card"><h1>Approval Desk unavailable</h1><p>Manager authentication could not be reached.</p></section></main>;
+  if (session === undefined) return <main className="setup-shell"><section className="setup-card"><p>Loading secure session…</p></section></main>;
+  if (session === null) return <main className="setup-shell"><section className="setup-card"><span className="eyebrow">Fiar · secure manager session</span><h1>Approval Desk</h1><p className="lede">Sign in through your organization identity provider.</p><a className="button primary" href="/v1/auth/oidc/start">Sign in</a></section></main>;
+  const client = createSessionDashboardClient(session.csrfToken);
+  return <ApprovalDesk
+    client={client}
+    disconnectLabel="Sign out"
+    onAuthenticationExpired={() => setSession(null)}
+    onSessionRefresh={refreshSession}
+    onDisconnect={() => { void logoutManagerSession(session.csrfToken).finally(() => setSession(null)); }}
+  />;
 }
 
 function CredentialSetup({ onConnect }: { onConnect: (credential: string) => void }) {
@@ -60,8 +89,14 @@ function CredentialSetup({ onConnect }: { onConnect: (credential: string) => voi
   );
 }
 
-function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisconnect: () => void }) {
-  const client = useMemo(() => createDashboardClient(credential), [credential]);
+function ApprovalDesk({ client, onDisconnect, disconnectLabel = 'Clear credential', onAuthenticationExpired, onSessionRefresh }: {
+  client: FiarClient;
+  onDisconnect: () => void;
+  disconnectLabel?: string;
+  onAuthenticationExpired?: () => void;
+  onSessionRefresh?: () => Promise<void>;
+}) {
+  const stableClient = useMemo(() => client, [client]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [selected, setSelected] = useState<Approval | null>(null);
   const [listLoading, setListLoading] = useState(true);
@@ -77,11 +112,12 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
     const request = ++listRequest.current;
     setListLoading(true);
     try {
-      const items = await listAllPendingApprovals(client);
+      const items = await listAllPendingApprovals(stableClient);
       if (request === listRequest.current) {
         setApprovals(items);
       }
     } catch (error) {
+      if (error instanceof FiarApiError && error.status === 401) onAuthenticationExpired?.();
       if (request === listRequest.current) {
         setNotice(describeDashboardError(error));
       }
@@ -90,19 +126,20 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
         setListLoading(false);
       }
     }
-  }, [client]);
+  }, [stableClient]);
 
   const loadDetail = useCallback(async (approvalId: string): Promise<Approval | null> => {
     const request = ++detailRequest.current;
     setSelected(null);
     setDetailLoading(true);
     try {
-      const approval = await client.getApproval(approvalId);
+      const approval = await stableClient.getApproval(approvalId);
       if (request === detailRequest.current) {
         setSelected(approval);
         return approval;
       }
     } catch (error) {
+      if (error instanceof FiarApiError && error.status === 401) onAuthenticationExpired?.();
       if (request === detailRequest.current) {
         setNotice(describeDashboardError(error));
       }
@@ -112,7 +149,7 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
       }
     }
     return null;
-  }, [client]);
+  }, [stableClient]);
 
   useEffect(() => {
     void loadPending();
@@ -134,7 +171,7 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
     setSubmitting(true);
     setNotice(null);
     try {
-      const result = await client.decideApproval(selected.approvalId, {
+      const result = await stableClient.decideApproval(selected.approvalId, {
         decision: confirming,
         comment: comment.trim().length > 0 ? comment.trim() : null,
         expectedRequestHash: selected.requestHash,
@@ -150,13 +187,16 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
       setConfirming(null);
       setComment('');
       await loadPending();
+      await onSessionRefresh?.();
     } catch (error) {
+      if (error instanceof FiarApiError && error.status === 401) onAuthenticationExpired?.();
       const failedApprovalId = selected.approvalId;
       setConfirming(null);
       const [, latest] = await Promise.all([
         loadPending(),
         loadDetail(failedApprovalId),
       ]);
+      await onSessionRefresh?.().catch(() => onAuthenticationExpired?.());
       setNotice(describeDecisionError(error, latest));
     } finally {
       setSubmitting(false);
@@ -172,7 +212,7 @@ function ApprovalDesk({ credential, onDisconnect }: { credential: string; onDisc
         </div>
         <div className="topbar-actions">
           <button className="button secondary" type="button" onClick={() => void refresh()}>Refresh</button>
-          <button className="button ghost" type="button" onClick={onDisconnect}>Clear credential</button>
+          <button className="button ghost" type="button" onClick={onDisconnect}>{disconnectLabel}</button>
         </div>
       </header>
 

@@ -101,6 +101,7 @@ export async function createGatewayTestContext(
       pool,
       devCredentials: createTestCredentialDirectory(),
       approvalExpiryHours: 12,
+      runtimeMode: 'test',
       ...options,
     });
 
@@ -123,6 +124,7 @@ export async function createGatewayTestContext(
           pool,
           devCredentials: createTestCredentialDirectory(),
           approvalExpiryHours: 12,
+          runtimeMode: 'test',
           ...options,
         });
         context.app = app;

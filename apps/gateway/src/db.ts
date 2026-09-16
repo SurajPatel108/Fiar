@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { Pool, type PoolClient } from 'pg';
 
 const ROOT_DIR = process.cwd();
+export const REQUIRED_MIGRATION = '0006_phase6_identity_and_operations.sql';
 
 export function createDatabasePool(databaseUrl: string): Pool {
   return new Pool({ connectionString: databaseUrl, max: 10 });
@@ -53,6 +54,7 @@ export async function applySchema(pool: Pool): Promise<void> {
       '0003_outbox_and_audit.sql',
       '0004_approval_decisions.sql',
       '0005_worker_execution.sql',
+      '0006_phase6_identity_and_operations.sql',
     ]) {
       if (applied.has(fileName)) {
         continue;
@@ -72,6 +74,36 @@ export async function applySchema(pool: Pool): Promise<void> {
   }
 }
 
+export async function assertRequiredMigrations(pool: Pool): Promise<void> {
+  const result = await pool.query<{ present: boolean }>(
+    `select exists(select 1 from schema_migrations where name = $1) as present`,
+    [REQUIRED_MIGRATION],
+  );
+  if (result.rows[0]?.present !== true) throw new Error('Required database migrations are not applied');
+}
+
+export async function checkDatabaseReady(pool: Pool): Promise<boolean> {
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('begin');
+      try {
+        await client.query(`set local statement_timeout = '2000ms'`);
+        await client.query('select 1');
+        const result = await client.query<{ present: boolean }>(
+          `select exists(select 1 from schema_migrations where name = $1) as present`,
+          [REQUIRED_MIGRATION],
+        );
+        await client.query('commit');
+        return result.rows[0]?.present === true;
+      } catch (error) {
+        await client.query('rollback').catch(() => undefined);
+        throw error;
+      }
+    } finally { client.release(); }
+  } catch { return false; }
+}
+
 export async function applySeedData(pool: Pool): Promise<void> {
   const filePath = resolve(ROOT_DIR, 'db/seeds/local-dev.sql');
   const sql = await readFile(filePath, 'utf8');
@@ -81,6 +113,11 @@ export async function applySeedData(pool: Pool): Promise<void> {
 export async function resetApplicationData(pool: Pool): Promise<void> {
   await pool.query(`
     truncate table
+      security_audit_events,
+      human_sessions,
+      oidc_login_attempts,
+      human_identity_mappings,
+      workload_credentials,
       fake_provider_refunds,
       execution_attempts,
       execution_reservations,

@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 
 import { createId } from '../../../packages/shared/src/ids';
+import { sanitizeAuditPayload } from '../../../packages/shared/src/audit-redaction';
 
 export interface AuditEventInput {
   tenantId: string;
@@ -16,6 +17,10 @@ export interface AuditEventInput {
 
 export async function insertAuditEvent(client: PoolClient, input: AuditEventInput): Promise<string> {
   const auditId = createId('aud');
+  const payload = sanitizeAuditPayload(input.payload, new Set([
+    'actionId', 'orderId', 'amountMinor', 'currency', 'status', 'approvalId',
+    'approvalStatus', 'actionStatus', 'commentPresent',
+  ]));
   await client.query(
     `
       insert into audit_events (
@@ -40,7 +45,7 @@ export async function insertAuditEvent(client: PoolClient, input: AuditEventInpu
       input.requestHash,
       input.decision,
       input.reason,
-      JSON.stringify(input.payload),
+      JSON.stringify(payload),
       input.correlationId,
     ],
   );

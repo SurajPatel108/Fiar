@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+**/node_modules
+dist
+**/dist
+.env
+*.env
+!*.env.example
+*.local
+infra/compose/secrets/*
+!infra/compose/secrets/*.example
+infra/backups
+docs/*.pdf
+npm-debug.log*

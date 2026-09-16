@@ -37,6 +37,9 @@ export class FiarClient {
   private readonly transport: FetchTransport;
 
   constructor(private readonly options: FiarClientOptions) {
+    if (options.credential !== undefined && options.workloadCredential !== undefined) {
+      throw new TypeError('Use either credential or workloadCredential, not both');
+    }
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.transport = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
@@ -135,6 +138,9 @@ export class FiarClient {
     }
     if (this.options.credential !== undefined) {
       headers[this.options.credentialHeader ?? 'x-fiar-dev-credential'] = this.options.credential;
+    }
+    if (this.options.workloadCredential !== undefined) {
+      headers.authorization = `Bearer ${this.options.workloadCredential}`;
     }
     return headers;
   }

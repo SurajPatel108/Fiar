@@ -5,6 +5,7 @@ export type DomainErrorCode =
   | 'CONFLICT'
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
+  | 'RATE_LIMITED'
   | 'POLICY_DENIED';
 
 export interface DomainErrorDetails {
