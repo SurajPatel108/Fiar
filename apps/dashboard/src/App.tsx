@@ -275,7 +275,7 @@ function ApprovalDetail({ approval, onDecide }: {
         <Fact label="Tool" value={approval.tool} />
         <Fact label="Expires" value={formatDate(approval.expiresAt)} />
         <Fact label="Order fact version" value={approval.context.orderFactVersion} />
-        <Fact label="Order active" value={formatBoolean(approval.context.active)} />
+        <Fact label="Order active" value={formatBoolean(approval.context.orderActive)} />
         <Fact label="Refundable remaining" value={formatNullableMoney(approval.context.refundableRemainingMinor)} />
         <Fact label="Order exposure" value={formatNullableMoney(approval.context.orderExposureMinor)} />
         <Fact label="Budget available" value={formatNullableMoney(approval.context.budgetAvailableMinor)} />

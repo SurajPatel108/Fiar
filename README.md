@@ -7,11 +7,12 @@ The implemented backend is a constrained authorization firewall for AI agents: a
 ## What to read first
 
 1. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the system boundaries and lifecycle.
-2. [docs/DATA_AND_API_DESIGN.md](docs/DATA_AND_API_DESIGN.md) for the entities, states, and endpoints.
-3. [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for the dependency-ordered build phases and implementation status.
-4. [docs/SECURITY_AND_TESTING.md](docs/SECURITY_AND_TESTING.md) for invariants and test coverage.
-5. [docs/DECISIONS_AND_QUESTIONS.md](docs/DECISIONS_AND_QUESTIONS.md) for assumptions, tradeoffs, and blockers.
-6. [docs/FILE_MAP.md](docs/FILE_MAP.md) for the proposed file structure and phase-by-phase file ownership.
+2. [docs/PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md](docs/PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md) for the long-term user experience, permission configuration, trusted fact verification, onboarding, and post-MVP roadmap.
+3. [docs/DATA_AND_API_DESIGN.md](docs/DATA_AND_API_DESIGN.md) for the currently implemented entities, states, and endpoints.
+4. [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for phase status and the dependency-ordered roadmap.
+5. [docs/SECURITY_AND_TESTING.md](docs/SECURITY_AND_TESTING.md) for invariants and test coverage.
+6. [docs/DECISIONS_AND_QUESTIONS.md](docs/DECISIONS_AND_QUESTIONS.md) for assumptions, tradeoffs, and blockers.
+7. [docs/FILE_MAP.md](docs/FILE_MAP.md) for implemented files and clearly labeled future components.
 
 ## Initial scope
 

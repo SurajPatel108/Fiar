@@ -114,6 +114,8 @@ The provider call occurs outside the database transaction and only after the cla
 
 The tenant kill switch is checked inside the claim transaction. Once enabled it blocks new provider calls. A call already in flight may have produced an irreversible provider result, so the worker finishes or reconciles that durable attempt instead of pretending it was canceled.
 
+The current refund policy reads a server-controlled order record. Its `orderActive` policy fact describes whether that order is active; it is not an agent-status signal. Agent and tenant suspension are enforced separately during gateway authentication/action intake and again by the worker before dispatch.
+
 ## Credential isolation and bypass prevention
 
 Credentials stay outside the agent by design:
@@ -141,3 +143,9 @@ The implementation should be layered in this order:
 5. Worker reservation and reconciliation.
 6. SDK and React dashboard.
 7. Hardening, metrics, and deployment.
+
+## Future target architecture (not implemented)
+
+The long-term design adds distinct identity/session infrastructure, an administrative policy control plane, a provider-neutral trusted `FactResolver`, controlled external fact connectors, one selected refund-provider sandbox, and guided organization onboarding. These are proposed Phases 6 through 10, not current runtime components. See [PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md](PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md) for the target experience and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for prerequisites and acceptance criteria.
+
+Until those phases are delivered, authentication remains explicitly development-only, order facts remain PostgreSQL fixtures controlled by the server, the worker uses only its deterministic fake provider, policy authoring is not exposed, and there is no onboarding or administrative UI.

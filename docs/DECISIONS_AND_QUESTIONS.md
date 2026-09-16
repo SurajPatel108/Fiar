@@ -113,11 +113,19 @@ Tradeoff:
 3. Retryable failures are limited to failures known to occur before a provider result; ambiguous outcomes always require lookup reconciliation.
 4. A tenant kill switch blocks new claims from crossing the provider boundary but does not discard already in-flight outcomes.
 5. Order and budget capacity are reserved transactionally before dispatch, retained during ambiguity, consumed on success, and released after confirmed non-execution or failure.
+6. Multiple partial refunds are allowed when authoritative remaining balance, aggregate exposure, budget, and threshold rules permit them. `previous_refund_total_minor` records confirmed execution history; it is not a standalone denial condition.
+
+## Future roadmap decisions
+
+1. Phase 6 hardens operations and identity but does not add a real provider.
+2. Administrative policy control, trusted fact connectors, provider sandbox execution, and onboarding are separated into Phases 7, 8, 9, and 10 so convenience work cannot bypass prerequisite security boundaries.
+3. The future `FactResolver` must fail closed for missing or stale decisive facts and must not accept agent assertions as authoritative replacements.
+4. The deterministic fake provider remains the test default even after a sandbox connector is selected.
 
 ## Questions that block later phases
 
 1. What should happen to queued work when a tenant is suspended: keep, cancel, or reconcile to terminal failure?
-2. Which provider sandbox or mock contract should the worker target first?
+2. Which refund-provider sandbox should Phase 9 target, and what idempotency, lookup, webhook, credential-scope, rate-limit, and failure-injection guarantees does it provide?
 
 ## Questions that can wait
 

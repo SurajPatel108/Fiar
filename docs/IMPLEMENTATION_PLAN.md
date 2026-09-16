@@ -20,7 +20,7 @@ Tasks:
 
 - Review the paper’s refund workflow and the limitations of the tutorial code.
 - Finalize the MVP scope around one refund action, one tenant model, and one manager approval flow.
-- Record all blocked decisions in [docs/DECISIONS_AND_QUESTIONS.md](docs/DECISIONS_AND_QUESTIONS.md).
+- Record all blocked decisions in [DECISIONS_AND_QUESTIONS.md](DECISIONS_AND_QUESTIONS.md).
 
 Acceptance criteria:
 
@@ -227,7 +227,7 @@ Completed deliverables:
 
 Verification:
 
-- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, and 35 Phase 2/3 PostgreSQL integration tests.
+- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, and 36 Phase 2/3 PostgreSQL integration tests.
 
 Dashboard status:
 
@@ -297,7 +297,7 @@ Completed deliverables:
 
 Verification:
 
-- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 35 Phase 2/3 integration tests, and 13 Phase 4 worker tests.
+- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 36 Phase 2/3 integration tests, and 13 Phase 4 worker tests.
 
 Limitations:
 
@@ -370,51 +370,294 @@ Completed deliverables:
 
 Verification:
 
-- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 35 Phase 2/3 integration tests, 13 Phase 4 worker tests, 6 SDK tests, 3 dashboard behavior tests, and the dashboard typecheck/build.
+- `npm run verify` passes strict TypeScript, 7 Phase 1 tests, 36 Phase 2/3 integration tests, 13 Phase 4 worker tests, 6 SDK tests, 3 dashboard behavior tests, and the dashboard typecheck/build.
 
 Limitations:
 
 - The dashboard credential entry is only for local development; production authentication and managed browser sessions remain Phase 6 work.
 - SDK polling helpers, component/browser automation, dashboard deployment packaging, broader workflows, and a production provider remain deferred.
 
-## Phase 6: Production hardening
+## Phase 6: Operational and identity hardening
 
-Goal: make the MVP resilient enough for a controlled pilot.
+Goal: make the existing refund MVP deployable for a controlled internal pilot with production-grade identities, secret handling, health signals, recovery, and observability, without adding a real provider.
 
-Tasks:
-
-1. Add deployment packaging and local compose support.
-2. Add health checks, backup checks, and recovery validation.
-3. Add audit redaction enforcement.
-4. Add metrics for denial rate, approval rate, duplicate prevention, and worker retries.
-5. Add failure-mode tests for crash recovery, policy updates, and stale approvals.
+Status: proposed; not implemented.
 
 Prerequisites:
 
-- Phase 4 worker recovery.
+- Completed Phases 1–5 and their verification suites.
+- An approved workload-identity and human-session design.
+- A selected secret manager and pilot deployment environment.
 
-Files to create or change:
+Tasks:
 
-- infra/docker/Dockerfile.gateway
-- infra/docker/Dockerfile.worker
-- infra/docker/Dockerfile.dashboard
-- infra/compose/docker-compose.yml
-- infra/sql/backup-check.sql
-- infra/sql/health-check.sql
+1. Add production workload authentication for agents and services.
+2. Add production authentication and managed sessions for managers and administrators.
+3. Integrate a secret manager and define credential issuance, expiration, rotation, and revocation.
+4. Exclude the development credential adapter from production runtime paths.
+5. Add gateway, worker, database, and connector health/readiness checks.
+6. Add CI verification and reproducible gateway, worker, and dashboard container images.
+7. Complete local and pilot deployment packaging.
+8. Validate database backup and restoration procedures.
+9. Enforce audit redaction and add browser/session-security testing.
+10. Add metrics and alerts for denials, approvals, retries, duplicate prevention, reconciliation, and provider failures.
+
+Proposed files/components:
+
+- Production authentication adapters and manager session middleware under `apps/gateway/src/`.
+- Secret-manager and credential-lifecycle adapters under a proposed `packages/identity/` boundary.
+- Gateway and worker health/readiness handlers.
+- `.github/workflows/verify.yml` or the selected CI equivalent.
+- `infra/docker/Dockerfile.gateway`, `Dockerfile.worker`, and `Dockerfile.dashboard`.
+- Pilot compose/deployment manifests and `infra/sql/backup-check.sql` / `health-check.sql`.
+- Identity, session, redaction, health, restore, and operational failure tests.
 
 Expected behavior:
 
-- The system fails closed when identity, policy, or audit storage is unavailable.
-- Recovery behavior is measurable, not assumed.
+- Production runtimes reject development credentials and fail closed when identity, policy, audit, database, or required secret infrastructure is unavailable.
+- Operators can distinguish liveness, readiness, degraded dependencies, retry pressure, and unresolved reconciliation.
+- Credential revocation prevents new authority while preserving durable handling of already in-flight provider outcomes.
 
 Acceptance criteria:
 
-- Backup restoration is tested.
-- Audit output is redacted.
-- Hardening checks do not change the authorization semantics.
+- Agent/service identities and manager/admin sessions are tenant-scoped, expiring, revocable, and tested.
+- No production secret is committed, returned to clients, or emitted in logs/audits.
+- CI reproduces the complete verification suite and container builds.
+- Backup restoration is exercised successfully in an isolated environment.
+- Operational metrics and alerts cover every listed lifecycle signal.
 
 Verification steps:
 
-- Run backup and health checks.
-- Review audit samples for secret leakage.
-- Run failure injection tests for crash and timeout paths.
+- Run workload and human-authentication integration tests, including expiration, rotation, revocation, CSRF/session, and tenant-isolation cases.
+- Build and scan all images; start the packaged pilot stack and exercise readiness failure modes.
+- Restore an isolated backup and compare required records and constraints.
+- Inject database, secret-manager, and dependency failures and verify fail-closed behavior and alerts.
+- Review stored and emitted audit/log samples for secrets.
+
+Limitations:
+
+- Phase 6 does not introduce a real refund provider, administrative policy authoring, external fact connectors, or broader action types.
+- The deterministic fake provider remains the only execution connector.
+
+## Phase 7: Administration and policy control plane
+
+Goal: let authorized administrators manage tenants, principals, scoped permissions, limits, policy lifecycle, and emergency controls through a separately authorized control plane.
+
+Status: proposed; not implemented.
+
+Prerequisites:
+
+- Phase 6 production identities, managed administrator sessions, secret handling, CI, and audit enforcement.
+- A reviewed administrative authorization and separation-of-duties model.
+
+Tasks:
+
+1. Add tenant administration and agent/service registration.
+2. Configure per-agent allowed tools and resource/environment scopes.
+3. Configure per-agent amount, rate, concurrency, and budget limits.
+4. Add agent suspension and credential revocation workflows.
+5. Support draft, published, retired, and rolled-back policy versions.
+6. Add policy validation, deterministic simulation, and shadow/observation mode.
+7. Add administrative kill-switch APIs with strict authorization.
+8. Audit every policy, identity, permission, credential, and kill-switch change.
+9. Build the initial administrator UI.
+
+Proposed files/components:
+
+- A proposed `apps/admin/` TypeScript/React application.
+- Gateway administration routes and dedicated admin authorization middleware.
+- Proposed `packages/policy-admin/` schemas, validation, simulation, and publication services.
+- Forward database migrations for permission scopes, limits, policy lifecycle, and administrative audit records.
+- Administration API, permission-boundary, concurrency-limit, simulation, rollback, and UI tests.
+
+Expected behavior:
+
+- Only separately authorized administrators can change principals, permissions, limits, policy state, credentials, or kill switches.
+- Published policy snapshots remain immutable; rollback activates a prior immutable version rather than editing history.
+- Simulation and observation mode produce non-executing results that cannot create outbox work.
+
+Acceptance criteria:
+
+- Per-agent tool, resource, environment, amount, rate, concurrency, and budget rules are server-enforced.
+- Suspension/revocation prevents new authority and is rechecked before dispatch.
+- Invalid policies cannot publish, every change is auditable, and rollback is deterministic.
+- Administrative kill-switch operations are tenant-scoped, authorized, and tested.
+
+Verification steps:
+
+- Run cross-tenant and role-escalation tests for every administration endpoint.
+- Simulate representative policies and compare results with enforced decisions.
+- Race rate, concurrency, and budget limits and prove aggregate enforcement.
+- Publish, retire, and roll back versions while approvals and work are pending.
+- Verify observation mode never queues execution.
+
+Limitations:
+
+- Phase 7 does not add external fact sources or a real provider.
+- The initial administrator UI is intentionally narrow and does not generalize the current refund schema into arbitrary executable code.
+
+## Phase 8: Trusted fact resolver and connectors
+
+Goal: replace fixture-only fact loading with a provider-neutral, provenance-aware resolver that obtains required facts from controlled sources and fails closed when facts are missing or stale.
+
+Status: proposed; not implemented.
+
+Prerequisites:
+
+- Phase 7 validated policy declarations and administrative connector configuration.
+- Approved canonical fact naming, schema, provenance, freshness, and redaction conventions.
+
+Tasks:
+
+1. Define a provider-neutral `FactResolver` boundary.
+2. Add required-fact declarations to policy definitions.
+3. Define canonical fact names and value schemas.
+4. Record source system, resource identifier, retrieval timestamp, source record version, and maximum age.
+5. Enforce missing/stale-fact fail-closed behavior.
+6. Add connector health reporting, fact redaction, and data minimization.
+7. Implement one sandbox or controlled order-data connector.
+8. Implement one additional shipping or payment fact connector.
+9. Revalidate critical mutable facts before execution.
+10. Prove that agent-supplied claims cannot replace decisive trusted facts.
+
+Proposed files/components:
+
+- Proposed `packages/facts/` contracts, canonical schemas, resolver, freshness logic, and redaction.
+- Proposed `apps/gateway/src/fact-resolution/` orchestration.
+- Read-only connector adapters under a proposed `packages/connectors/facts/` boundary.
+- Forward migrations for connector configuration and fact provenance snapshots.
+- Resolver contract, stale/missing fact, connector-health, minimization, provenance, and pre-execution revalidation tests.
+
+Expected behavior:
+
+- Policy declares the facts it requires; Fiar resolves them from configured authoritative sources rather than accepting decisive agent assertions.
+- Every decisive fact carries provenance and freshness metadata and is minimized before storage or display.
+- Missing, stale, unhealthy, malformed, or mismatched facts fail closed.
+
+Acceptance criteria:
+
+- The two controlled connectors map source records into validated canonical facts.
+- Maximum-age rules are deterministic and use trusted timestamps/source versions.
+- Critical fact changes between authorization and execution prevent unsafe dispatch.
+- Tests demonstrate that manipulated request context cannot self-assert eligibility.
+
+Verification steps:
+
+- Run connector contract tests with valid, missing, malformed, stale, and unavailable responses.
+- Attempt to substitute agent-provided values for every decisive fact.
+- Change a critical source record after authorization and confirm worker revalidation blocks dispatch.
+- Review stored facts and UI/API responses for minimization and redaction.
+
+Limitations:
+
+- Phase 8 connectors are controlled/sandbox or read-only; they do not perform refunds.
+- Generic arbitrary-source scripting and unrestricted administrator code are out of scope.
+
+## Phase 9: Real provider sandbox pilot
+
+Goal: execute the proven refund lifecycle against one narrowly scoped provider sandbox in a controlled pilot while retaining deterministic fake-provider coverage.
+
+Status: proposed and blocked on provider selection; not implemented.
+
+Prerequisites:
+
+- Phase 6 operational/identity hardening and Phase 8 critical-fact revalidation.
+- A documented provider decision covering sandbox access, credential scope, idempotency, result lookup, webhook requirements, limits, and failure behavior.
+- Security and legal approval for the controlled pilot.
+
+Tasks:
+
+1. Implement one narrowly scoped refund-provider sandbox connector.
+2. Hold provider credentials only in the worker through the secret-manager boundary.
+3. Enforce provider-side idempotency and result lookup/reconciliation.
+4. Verify signed webhooks if the selected provider requires them.
+5. Add monetary and rate limits independent of agent input.
+6. Add sandbox failure injection and emergency provider shutdown.
+7. Display human-visible execution and reconciliation status.
+8. Operate a controlled pilot environment while keeping the deterministic fake provider for all default tests.
+
+Proposed files/components:
+
+- A provider-specific connector under a proposed `apps/worker/src/connectors/` boundary after selection.
+- Provider secret configuration, lookup/reconciliation, and optional webhook verification adapters.
+- Pilot-only status surfaces that expose safe execution state but never provider credentials.
+- Provider contract, idempotency, webhook, limit, shutdown, ambiguity, and failure-injection tests.
+
+Expected behavior:
+
+- Only the worker can call the selected sandbox, using least-privilege credentials and stable idempotency keys.
+- Ambiguous results enter reconciliation and are never blindly retried.
+- Emergency shutdown blocks new sandbox calls without misreporting in-flight results.
+
+Acceptance criteria:
+
+- Repeated delivery produces one provider-side sandbox effect.
+- Lookup and webhook flows converge durable local state after lost responses.
+- Monetary/rate limits and emergency shutdown are enforced under concurrency.
+- Human users can distinguish queued, dispatched, unresolved, failed, and completed states without seeing secrets.
+
+Verification steps:
+
+- Run the provider's sandbox contract suite and Fiar failure-injection matrix.
+- Simulate timeout after provider success, duplicate delivery, delayed webhook, invalid signature, rate limiting, and shutdown races.
+- Reconcile provider and local ledgers for the complete pilot dataset.
+- Keep the existing fake-provider suite as a required CI gate.
+
+Limitations:
+
+- Provider selection is unresolved; no production provider or live-money execution is authorized by this plan.
+- The pilot remains limited to the refund workflow, sandbox credentials, bounded amounts, and approved tenants.
+
+## Phase 10: Product onboarding and broader integrations
+
+Goal: turn the hardened refund pilot into a guided product experience and add integration adapters without expanding action types before the refund workflow is stable.
+
+Status: proposed; not implemented.
+
+Prerequisites:
+
+- Phases 6–9 meet their acceptance criteria in the controlled pilot.
+- Stable administration, fact, provider, identity, and policy contracts.
+
+Tasks:
+
+1. Add organization onboarding and an agent setup wizard.
+2. Add permission and policy configuration workflows.
+3. Add fact-source and provider connection workflows.
+4. Add approver-role configuration and SDK credential issuance.
+5. Require policy testing before activation.
+6. Guide observation/shadow-mode rollout before enforcement and execution.
+7. Add an MCP or selected agent-framework adapter that remains a transport boundary.
+8. Add additional action types only after the refund workflow is demonstrably stable.
+
+Proposed files/components:
+
+- Onboarding routes and UI within the future administrator application.
+- Guided setup state for organizations, agents, policies, fact sources, providers, approvers, and activation.
+- Proposed adapter packages under `packages/adapters/` after a framework decision.
+- Onboarding, connection-test, credential-delivery, shadow-rollout, adapter-contract, and new-action security tests.
+
+Expected behavior:
+
+- An administrator can configure and test the complete authorization path before activating execution.
+- Issued SDK credentials are scoped, expiring, revocable, and delivered without entering model prompts or source code.
+- Adapters submit strict action requests but cannot authorize, evaluate policy, or call providers directly.
+
+Acceptance criteria:
+
+- Every onboarding step validates prerequisites and produces an auditable state change.
+- Policy simulation and connector tests must pass before activation.
+- Observation mode cannot execute actions, and enabling execution requires an explicit authorized transition.
+- Any new action type has its own strict schema, policy tests, trusted facts, approval rules, connector restrictions, and failure analysis.
+
+Verification steps:
+
+- Run end-to-end onboarding in an isolated tenant from organization creation through shadow mode and controlled activation.
+- Test abandoned/resumed setup, credential revocation, connector failure, unauthorized role changes, and cross-tenant isolation.
+- Run adapter conformance tests proving no client-side authorization or provider bypass.
+- Complete a security review before enabling each additional action type.
+
+Limitations:
+
+- Phase 10 does not promise arbitrary tools, generic natural-language policy, or unrestricted connectors.
+- Public production rollout, multi-region operation, advanced analytics, and commercial packaging require separate decisions and hardening.

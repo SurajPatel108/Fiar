@@ -8,7 +8,7 @@ const base: Facts = {
   tool: 'refund.create',
   amountMinor: 4900,
   currency: 'USD',
-  active: true,
+  orderActive: true,
   remainingMinor: 20000,
   orderExposureMinor: 0,
   budgetAvailableMinor: 50000,
@@ -18,7 +18,10 @@ test('refund policy boundaries', () => {
   assert.equal(decide(base).decision, 'ALLOW');
   assert.equal(decide({ ...base, amountMinor: 5000 }).decision, 'REQUIRE_APPROVAL');
   assert.equal(decide({ ...base, tool: 'bank.update' }).decision, 'DENY');
-  assert.equal(decide({ ...base, active: false }).decision, 'DENY');
+  assert.deepEqual(decide({ ...base, orderActive: false }), {
+    decision: 'DENY',
+    reason: 'ORDER_NOT_ACTIVE',
+  });
   assert.equal(decide({ ...base, budgetAvailableMinor: 1 }).decision, 'DENY');
   assert.equal(decide({ ...base, orderExposureMinor: 100 }).decision, 'REQUIRE_APPROVAL');
 });
@@ -26,5 +29,5 @@ test('refund policy boundaries', () => {
 test('refund policy rejects missing or invalid facts', () => {
   assert.equal(decide({ ...base, remainingMinor: Number.NaN } as Facts).decision, 'DENY');
   assert.equal(decide({ ...base, budgetAvailableMinor: Number.POSITIVE_INFINITY } as Facts).decision, 'DENY');
-  assert.equal(decide({ ...base, active: 'true' } as unknown as Facts).decision, 'DENY');
+  assert.equal(decide({ ...base, orderActive: 'true' } as unknown as Facts).decision, 'DENY');
 });

@@ -44,6 +44,20 @@ Expected outcome:
 
 - The gateway rejects the request before any provider call or approval creation.
 
+### Order activity and principal suspension
+
+The authoritative `orderActive` fact describes the order, while principal and tenant activity come from authenticated server-side records. These signals must not share a reason code or substitute for one another.
+
+Tests:
+
+- Evaluate an inactive order and expect `ORDER_NOT_ACTIVE`.
+- Suspend an agent or tenant and attempt action intake.
+- Suspend an agent or tenant after queueing and attempt worker dispatch.
+
+Expected outcome:
+
+- Inactive orders are denied by policy; suspended principals and tenants are rejected by authentication/intake and worker revalidation.
+
 ### Aggregate limits
 
 Concurrent requests must respect tenant and order limits even when they race.
@@ -56,6 +70,7 @@ Tests:
 Expected outcome:
 
 - At most one request reserves capacity and advances.
+- A legitimate additional partial refund may advance when remaining balance, aggregate exposure, and budget permit it.
 
 ### Approval expiry
 
@@ -172,6 +187,7 @@ Expected outcome:
 | --- | --- | --- | --- |
 | Tenant isolation | tenant-scoped authorization helpers | action fetch/list by tenant | wrong-tenant replay |
 | Default denial | policy boundary tests | gateway validation tests | malformed input corpus |
+| Order/principal activity separation | policy reason tests | suspended intake tests | suspension before dispatch |
 | Aggregate limits | reservation math tests | concurrent action creation | parallel refund race |
 | Approval expiry | expiry helper tests | approval endpoint tests | policy publish while pending |
 | Request binding | canonical hash tests | approval decision tests | request mutation after approval |
@@ -197,6 +213,10 @@ Phases 2 through 4 verify tenant-scoped action and approval APIs, default denial
 ## Phase 5 client verification
 
 The Phase 5 SDK and dashboard remain untrusted clients. SDK tests verify exact request serialization, bound approval fields, caller-provided headers, and typed failure handling. Dashboard tests verify complete cursor traversal and stale decision messaging in addition to strict typechecking and a production build; its local manager credential exists only in page memory and all authorization remains at the gateway. Browser automation and production session-security testing remain deferred.
+
+## Future-phase security verification (not implemented)
+
+Phases 6–10 add production identity/session tests, credential rotation and revocation, administrative authorization and policy simulation, trusted-fact provenance/freshness checks, sandbox-provider reconciliation and shutdown tests, and onboarding/shadow-mode validation. These future checks do not imply that production authentication, generic policy authoring, external fact connectors, or a real provider exist today.
 
 ## Non-goals for testing the MVP
 

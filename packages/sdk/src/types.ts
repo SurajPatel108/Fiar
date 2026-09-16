@@ -41,7 +41,7 @@ export interface Action {
 
 export interface ApprovalBusinessContext {
   orderFactVersion: string;
-  active: boolean | null;
+  orderActive: boolean | null;
   refundableRemainingMinor: number | null;
   orderExposureMinor: number | null;
   budgetAvailableMinor: number | null;

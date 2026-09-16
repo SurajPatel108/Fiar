@@ -32,7 +32,7 @@ function approvalFixture(id: string, status: Approval['status'] = 'pending'): Ap
     resolvedAt: status === 'pending' ? null : '2026-01-01T01:00:00.000Z',
     context: {
       orderFactVersion: 'v1',
-      active: true,
+      orderActive: true,
       refundableRemainingMinor: 20000,
       orderExposureMinor: 100,
       budgetAvailableMinor: 50000,

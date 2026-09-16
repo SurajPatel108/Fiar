@@ -105,10 +105,11 @@ Important fields:
 - `tenant_id`.
 - `external_order_id`.
 - `currency`.
-- `original_amount_minor`.
+- `active`: whether the order itself is active and eligible for policy evaluation.
 - `refundable_remaining_minor`.
-- `amount_committed_minor`.
-- `amount_reserved_minor`.
+- `previous_refund_total_minor`.
+- `order_exposure_minor`.
+- `budget_available_minor`.
 - `status`: open, partially_refunded, refunded, closed, disputed.
 - `source_system`.
 - `source_version`.
@@ -118,6 +119,8 @@ Constraints:
 
 - The gateway reads authoritative order facts from this record, not from the agent.
 - Reservations and committed refunds update the durable balances transactionally.
+- Policy receives the order activity value as `orderActive`; an inactive order produces `ORDER_NOT_ACTIVE`. Principal and tenant suspension are separate authentication/dispatch checks.
+- Multiple partial refunds are permitted while refundable remaining balance, aggregate order exposure, budget, and approval thresholds permit them. `previous_refund_total_minor` is durable execution accounting updated after confirmed success; it is not an independent current-policy denial rule.
 
 ### Payment or refund execution attempt
 
@@ -335,7 +338,7 @@ Lists approvals visible to an authenticated manager or admin in the caller's ten
 
 ### GET /v1/approvals/:id
 
-Returns the exact approval-bound action fields, request hash, policy version ID, timestamps, resolution fields, and a whitelist of authoritative decision facts. Credentials, idempotency keys, canonical request payloads, tenant/principal internals, and outbox payloads are excluded.
+Returns the exact approval-bound action fields, request hash, policy version ID, timestamps, resolution fields, and a whitelist of authoritative decision facts including `orderActive`, remaining refundable balance, aggregate order exposure, and available budget. Credentials, idempotency keys, canonical request payloads, tenant/principal internals, and outbox payloads are excluded.
 
 ### POST /v1/approvals/:id/decision
 
@@ -370,7 +373,9 @@ Errors:
 
 Approval locks the approval and action rows, rechecks active tenant/manager/requester authority and the active policy, and records the decision atomically. Approval moves the action directly to `queued` and creates one outbox row; rejection moves it to `denied` and creates no outbox work. A queued action has not executed and no funds are reserved in Phase 3.
 
-## Planned later endpoints
+## Proposed later endpoints (not implemented)
+
+The following illustrate the future Phase 7 administration boundary. Their exact contracts must be designed and security-reviewed before implementation.
 
 ### POST /v1/agents/:id/suspend
 
@@ -418,3 +423,7 @@ Errors should be deterministic and not reveal cross-tenant details.
 - Wrong tenant behaves like not found or forbidden depending on the endpoint.
 - Approval expiry is reported as a stale approval or conflict, not as a silent success.
 - Ambiguous provider outcomes must be represented explicitly so retries do not create duplicates.
+
+## Future data and integration boundaries (not implemented)
+
+Phases 7 through 10 propose administrative models for agent/tool/resource limits and policy lifecycle; canonical fact declarations with provenance, source version, retrieval time, and maximum age; connector health; sandbox-provider credentials and reconciliation; and onboarding state. None of those schemas, APIs, connectors, or UIs are implemented by the Phase 1–5 refund prototype. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the staged plan rather than treating this section as a current API contract.

@@ -91,6 +91,7 @@ test('manager and admin can list and inspect safe approval details while agents 
   assert.equal(approval.amountMinor, 5000);
   assert.match(approval.requestHash, /^[a-f0-9]{64}$/);
   assert.equal(approval.context.orderFactVersion, 'v1');
+  assert.equal(approval.context.orderActive, true);
 
   for (const token of ['alpha-manager', 'alpha-admin']) {
     const response = await context.app.inject({

@@ -32,7 +32,7 @@ export interface ApprovalResponse {
   resolvedAt: string | null;
   context: {
     orderFactVersion: string;
-    active: boolean | null;
+    orderActive: boolean | null;
     refundableRemainingMinor: number | null;
     orderExposureMinor: number | null;
     budgetAvailableMinor: number | null;
@@ -548,7 +548,7 @@ function mapApprovalRow(row: DbApprovalRow): ApprovalResponse {
     resolvedAt: row.resolved_at ? toIsoString(row.resolved_at) : null,
     context: {
       orderFactVersion: row.order_fact_version,
-      active: typeof facts.active === 'boolean' ? facts.active : null,
+      orderActive: safeOrderActive(facts),
       refundableRemainingMinor: safeNumber(facts.remainingMinor),
       orderExposureMinor: safeNumber(facts.orderExposureMinor),
       budgetAvailableMinor: safeNumber(facts.budgetAvailableMinor),
@@ -560,6 +560,14 @@ function readSafeFacts(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function safeOrderActive(facts: Record<string, unknown>): boolean | null {
+  if (typeof facts.orderActive === 'boolean') {
+    return facts.orderActive;
+  }
+  // Actions recorded before the semantic rename stored the same order fact as `active`.
+  return typeof facts.active === 'boolean' ? facts.active : null;
 }
 
 function safeNumber(value: unknown): number | null {

@@ -87,6 +87,44 @@ test('creates a pending approval record without enqueueing the worker path', asy
   assert.equal(Number(expiry.rows[0]?.hours), 12);
 });
 
+test('allows an additional partial refund when remaining balance, exposure, and budget permit it', async () => {
+  const before = await context.pool.query<{
+    previous_refund_total_minor: string;
+    refundable_remaining_minor: string;
+    order_exposure_minor: string;
+    budget_available_minor: string;
+  }>(`
+    select
+      previous_refund_total_minor::text,
+      refundable_remaining_minor::text,
+      order_exposure_minor::text,
+      budget_available_minor::text
+    from order_facts
+    where tenant_id = 'ten_demo_alpha' and external_order_id = 'ord_demo_threshold'
+  `);
+  assert.deepEqual(before.rows[0], {
+    previous_refund_total_minor: '100',
+    refundable_remaining_minor: '20000',
+    order_exposure_minor: '100',
+    budget_available_minor: '50000',
+  });
+
+  const response = await postAction<ActionResponse>('alpha-agent', {
+    tool: 'refund.create',
+    orderId: 'ord_demo_threshold',
+    amountMinor: 100,
+    currency: 'USD',
+    idempotencyKey: 'additional-partial-refund',
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.body.decision, 'ALLOW');
+  assert.equal(response.body.reason, 'WITHIN_POLICY');
+  assert.equal(response.body.status, 'queued');
+  assert.equal(await queryCount('outbox_entries'), 1);
+  assert.equal(await queryCount('pending_approval_requests'), 0);
+});
+
 test('returns a conflict when the same idempotency key is replayed with different content', async () => {
   const first = await postAction<ActionResponse>('alpha-agent', {
     tool: 'refund.create',

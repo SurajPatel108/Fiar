@@ -2,7 +2,7 @@ export interface Facts {
   tool: string;
   amountMinor: number;
   currency: string;
-  active: boolean;
+  orderActive: boolean;
   remainingMinor: number;
   orderExposureMinor: number;
   budgetAvailableMinor: number;
@@ -32,7 +32,7 @@ export function isFacts(value: unknown): value is Facts {
     typeof value.tool === 'string' &&
     isSafeNonNegativeInteger(value.amountMinor) &&
     typeof value.currency === 'string' &&
-    typeof value.active === 'boolean' &&
+    typeof value.orderActive === 'boolean' &&
     isSafeNonNegativeInteger(value.remainingMinor) &&
     isSafeNonNegativeInteger(value.orderExposureMinor) &&
     isSafeNonNegativeInteger(value.budgetAvailableMinor)

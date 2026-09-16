@@ -37,7 +37,7 @@ function approvalFixture(): Approval {
     resolvedAt: null,
     context: {
       orderFactVersion: 'v1',
-      active: true,
+      orderActive: true,
       refundableRemainingMinor: 20000,
       orderExposureMinor: 100,
       budgetAvailableMinor: 50000,

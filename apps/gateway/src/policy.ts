@@ -11,8 +11,8 @@ export function decide(input: Facts, approvalThresholdMinor: unknown = 5000): Po
 
   const facts = input;
 
-  if (!facts.active) {
-    return deny('AGENT_SUSPENDED');
+  if (!facts.orderActive) {
+    return deny('ORDER_NOT_ACTIVE');
   }
 
   if (facts.tool !== 'refund.create') {

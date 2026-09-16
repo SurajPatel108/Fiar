@@ -18,7 +18,7 @@ interface LoadedBusinessFacts {
   facts: {
     tool: string;
     currency: string;
-    active: boolean;
+    orderActive: boolean;
     remainingMinor: number;
     orderExposureMinor: number;
     budgetAvailableMinor: number;
@@ -76,7 +76,7 @@ export async function createAction(
         tool: request.tool,
         amountMinor: request.amountMinor,
         currency: request.currency,
-        active: context.facts.active,
+        orderActive: context.facts.orderActive,
         remainingMinor: context.facts.remainingMinor,
         orderExposureMinor: context.facts.orderExposureMinor,
         budgetAvailableMinor: context.facts.budgetAvailableMinor,
@@ -403,7 +403,6 @@ async function loadBusinessFacts(client: PoolClient, principal: AuthenticatedPri
     principal_type: AuthenticatedPrincipal['principalType'];
     active: boolean;
     refundable_remaining_minor: string | number;
-    previous_refund_total_minor: string | number;
     order_exposure_minor: string | number;
     budget_available_minor: string | number;
     order_currency: 'USD';
@@ -420,7 +419,6 @@ async function loadBusinessFacts(client: PoolClient, principal: AuthenticatedPri
         p.type as principal_type,
         ofacts.active,
         ofacts.refundable_remaining_minor,
-        ofacts.previous_refund_total_minor,
         ofacts.order_exposure_minor,
         ofacts.budget_available_minor,
         ofacts.currency as order_currency
@@ -451,7 +449,6 @@ async function loadBusinessFacts(client: PoolClient, principal: AuthenticatedPri
   const remainingMinor = toSafeNonNegativeInteger(row.refundable_remaining_minor, 'refundableRemainingMinor');
   const orderExposureMinor = toSafeNonNegativeInteger(row.order_exposure_minor, 'orderExposureMinor');
   const budgetAvailableMinor = toSafeNonNegativeInteger(row.budget_available_minor, 'budgetAvailableMinor');
-  toSafeNonNegativeInteger(row.previous_refund_total_minor, 'previousRefundTotalMinor');
 
   return {
     orderFactId: row.order_fact_id,
@@ -461,7 +458,7 @@ async function loadBusinessFacts(client: PoolClient, principal: AuthenticatedPri
     facts: {
       tool: 'refund.create',
       currency: row.order_currency,
-      active: row.active,
+      orderActive: row.active,
       remainingMinor,
       orderExposureMinor,
       budgetAvailableMinor,
