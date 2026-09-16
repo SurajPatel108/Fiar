@@ -67,17 +67,33 @@ function secretProvider(mode: 'development' | 'test' | 'production'): SecretProv
   });
 }
 
-function installShutdown(app: Awaited<ReturnType<typeof buildGatewayApp>>): void {
-  let unbind: () => void = () => undefined;
-  const lifecycle = new GracefulShutdown({
-    timeoutMs: 10_000,
-    close: async () => { await app.close(); unbind(); },
-    onTimeout: () => operationalLog('error', { event: 'gateway.shutdown_timeout', service: 'gateway', reason: 'TIMEOUT' }),
+import { fileURLToPath } from 'node:url';
+
+export function createGatewayLifecycle(
+  app: Awaited<ReturnType<typeof buildGatewayApp>>,
+  options: { timeoutMs?: number; onTimeout?: () => void; unbind?: () => void } = {},
+): GracefulShutdown {
+  return new GracefulShutdown({
+    timeoutMs: options.timeoutMs ?? 10_000,
+    close: async () => {
+      await app.close();
+      options.unbind?.();
+    },
+    onTimeout: options.onTimeout ?? (() => operationalLog('error', { event: 'gateway.shutdown_timeout', service: 'gateway', reason: 'TIMEOUT' })),
   });
-  unbind = bindShutdownSignals(process, () => lifecycle.shutdown(), () => { process.exit(1); });
 }
 
-main().catch(() => {
-  operationalLog('error', { event: 'gateway.start_failed', service: 'gateway', reason: 'STARTUP_VALIDATION_FAILED' });
-  process.exitCode = 1;
-});
+function installShutdown(app: Awaited<ReturnType<typeof buildGatewayApp>>): GracefulShutdown {
+  let unbind: () => void = () => undefined;
+  const lifecycle = createGatewayLifecycle(app, { unbind: () => unbind() });
+  unbind = bindShutdownSignals(process, () => lifecycle.shutdown(), () => { process.exit(1); });
+  return lifecycle;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch(() => {
+    operationalLog('error', { event: 'gateway.start_failed', service: 'gateway', reason: 'STARTUP_VALIDATION_FAILED' });
+    process.exitCode = 1;
+  });
+}
+

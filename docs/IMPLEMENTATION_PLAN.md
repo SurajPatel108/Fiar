@@ -436,9 +436,10 @@ Verification steps:
 
 Completed verification:
 
-- `npm run verify` passes strict TypeScript, 15 unit/security/policy tests, 46 gateway integration tests, 8 operator CLI tests, 8 dedicated shutdown tests, 20 worker tests, 7 SDK tests, 3 dashboard tests, the production dashboard build, 20 real-browser fake-OIDC tests, hygiene, and Markdown-link checks.
-- `npm run verify:alerts` validates seven actionable alert rules with pinned Prometheus 2.55.1 tooling.
-- `npm run verify:containers` builds gateway, worker, dashboard, and local test-issuer images and runs a unique production-mode Compose stack through migration, file-secret loading, production auth rejection/success, fake-provider execution, readiness, metrics, non-root checks, and scoped teardown.
+- `npm run verify` passes strict TypeScript, 15 unit/security/policy tests, 47 gateway integration tests, 8 operator CLI tests, 11 dedicated shutdown tests, 21 worker tests, 7 SDK tests, 3 dashboard tests, the production dashboard build, 20 real-browser fake-OIDC tests, hygiene, and Markdown-link checks.
+- `npm run verify:alerts` validates 13 actionable alert rules with pinned Prometheus 2.55.1 tooling.
+- `npm run verify:containers` builds gateway, worker, dashboard, and local test-issuer images and runs a unique production-mode Compose stack through migration, file-secret loading, production auth rejection/success, fake-provider execution, readiness, metrics, manager OIDC session flow, agent session denial, non-root checks, and scoped teardown.
+
 - The browser suite verifies PKCE, one-use browser-bound state, nonce and callback failures, secure cookie attributes, CSRF, logout, idle refresh, expired/revoked sessions, manager role enforcement, empty browser storage, and malicious redirect parameters.
 - The guarded backup script restores into a random `fiar_restore_*` database, validates Phase 6 migrations and critical constraints, and removes only that temporary database.
 

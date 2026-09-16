@@ -34,9 +34,34 @@ export async function applyMigrations(pool: Pool): Promise<void> {
   await applySchema(pool);
 }
 
+export class MigrationError extends Error {
+  constructor(public readonly fileName: string | null, public readonly classification: string) {
+    super(fileName ? `Migration failed during "${fileName}": ${classification}` : `Migration failed: ${classification}`);
+    this.name = 'MigrationError';
+  }
+}
+
+export function classifyDatabaseError(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const code = (error as { code?: string }).code;
+    if (code === '42501' || code === 'EACCES') return 'permission_denied';
+    if (code === '42P01') return 'undefined_table';
+    if (code === '42703') return 'undefined_column';
+    if (code === '23505') return 'unique_violation';
+    if (code === '23503') return 'foreign_key_violation';
+    if (code === '42601') return 'syntax_error';
+    if (code === '57014') return 'query_canceled_or_timeout';
+    if (code === '08001' || code === '08006' || code === 'ECONNREFUSED' || code === 'ENOTFOUND') return 'connection_failure';
+    if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code)) return `pg_${code.toLowerCase()}`;
+  }
+  return 'database_error';
+}
+
 export async function applySchema(pool: Pool): Promise<void> {
-  const client = await pool.connect();
+  let client: PoolClient | undefined;
+  let currentFile: string | null = null;
   try {
+    client = await pool.connect();
     await client.query('begin');
     await client.query(`
       create table if not exists schema_migrations (
@@ -61,17 +86,24 @@ export async function applySchema(pool: Pool): Promise<void> {
         continue;
       }
 
+      currentFile = fileName;
       const filePath = resolve(ROOT_DIR, 'db/migrations', fileName);
       await runSqlFile(client, filePath);
       await client.query('insert into schema_migrations (name) values ($1)', [fileName]);
+      currentFile = null;
     }
 
     await client.query('commit');
   } catch (error) {
-    await client.query('rollback');
-    throw error;
+    if (client) {
+      await client.query('rollback').catch(() => undefined);
+    }
+    if (error instanceof MigrationError) throw error;
+    throw new MigrationError(currentFile, classifyDatabaseError(error));
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 

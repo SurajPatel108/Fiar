@@ -41,27 +41,68 @@ export interface OidcClientOptions {
 export class OidcClient {
   private discovery: Discovery | null = null;
   private jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+  private readyCache: { isReady: boolean; checkedAt: number } | null = null;
+  private readonly readyCacheTtlMs = 5000;
+
   constructor(private readonly options: OidcClientOptions) {}
 
   async initialize(): Promise<void> {
     const fetcher = this.options.fetchImplementation ?? fetch;
     const response = await fetcher(`${this.options.config.issuer}/.well-known/openid-configuration`, { signal: AbortSignal.timeout(3000) });
     if (!response.ok) throw new Error('OIDC discovery is unavailable');
-    const value = await response.json() as Partial<Discovery>;
+    let value: Partial<Discovery>;
+    try {
+      value = (await response.json()) as Partial<Discovery>;
+    } catch {
+      throw new Error('OIDC discovery response is malformed');
+    }
     if (value.issuer !== this.options.config.issuer || !value.authorization_endpoint || !value.token_endpoint || !value.jwks_uri) throw new Error('OIDC discovery response is invalid');
     for (const endpoint of [value.authorization_endpoint, value.token_endpoint, value.jwks_uri]) {
       const url = new URL(endpoint);
       if (this.options.config.issuer.startsWith('https:') && url.protocol !== 'https:') throw new Error('OIDC endpoint must use HTTPS');
     }
     if (value.code_challenge_methods_supported && !value.code_challenge_methods_supported.includes('S256')) throw new Error('OIDC provider does not support PKCE S256');
+
+    // Verify JWKS is reachable and has a usable signing key compatible with allowed algorithms
+    const jwksUrl = new URL(value.jwks_uri);
+    if (this.options.config.issuer.startsWith('https:') && jwksUrl.protocol !== 'https:') throw new Error('OIDC endpoint must use HTTPS');
+    const jwksResponse = await fetcher(jwksUrl.toString(), { signal: AbortSignal.timeout(3000) });
+    if (!jwksResponse.ok) throw new Error('OIDC JWKS is unavailable');
+    let jwksData: { keys?: unknown };
+    try {
+      jwksData = (await jwksResponse.json()) as { keys?: unknown };
+    } catch {
+      throw new Error('OIDC JWKS is malformed');
+    }
+    if (!jwksData || !Array.isArray(jwksData.keys) || jwksData.keys.length === 0) {
+      throw new Error('OIDC JWKS has no keys');
+    }
+    const hasUsableKey = jwksData.keys.some((key) => isKeyCompatible(key, this.options.config.allowedAlgorithms));
+    if (!hasUsableKey) {
+      throw new Error('OIDC JWKS has no key compatible with allowed algorithms');
+    }
+
     this.discovery = value as Discovery;
-    this.jwks = createRemoteJWKSet(new URL(value.jwks_uri));
+    this.jwks = createRemoteJWKSet(jwksUrl);
+    this.readyCache = { isReady: true, checkedAt: Date.now() };
   }
 
   isReady(): boolean { return this.discovery !== null && this.jwks !== null; }
-  async checkReady(): Promise<boolean> {
-    if (this.isReady()) return true;
-    try { await this.initialize(); return true; } catch { return false; }
+
+  async checkReady(force = false): Promise<boolean> {
+    const now = Date.now();
+    if (!force && this.readyCache && this.readyCache.isReady && (now - this.readyCache.checkedAt < this.readyCacheTtlMs)) {
+      return true;
+    }
+    try {
+      await this.initialize();
+      return true;
+    } catch {
+      this.discovery = null;
+      this.jwks = null;
+      this.readyCache = { isReady: false, checkedAt: Date.now() };
+      return false;
+    }
   }
 
   async begin(): Promise<OidcAuthorizationStart> {
@@ -150,3 +191,20 @@ export class OidcClient {
 function sha256Buffer(value: string): Buffer {
   return Buffer.from(sha256(value), 'hex');
 }
+
+export function isKeyCompatible(key: unknown, allowedAlgorithms: readonly string[]): boolean {
+  if (typeof key !== 'object' || key === null) return false;
+  const k = key as Record<string, unknown>;
+  if (k.use !== undefined && k.use !== 'sig') return false;
+  if (typeof k.alg === 'string') {
+    return allowedAlgorithms.includes(k.alg);
+  }
+  if (typeof k.kty === 'string') {
+    const kty = k.kty;
+    if (kty === 'RSA' && allowedAlgorithms.some((a) => a.startsWith('RS') || a.startsWith('PS'))) return true;
+    if (kty === 'EC' && allowedAlgorithms.some((a) => a.startsWith('ES'))) return true;
+    if (kty === 'OKP' && allowedAlgorithms.includes('EdDSA')) return true;
+  }
+  return false;
+}
+

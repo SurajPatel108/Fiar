@@ -2,9 +2,18 @@
 
 The Phase 6 pilot uses bounded, process-local metrics. Alerts never carry tenant, principal, order, action, URL, or request identifiers.
 
+## Scrape Targets
+
+- `FiarGatewayScrapeTargetUnavailable` indicates Prometheus cannot scrape the Gateway metrics endpoint. Check process status, container liveness, and network egress rules.
+- `FiarWorkerScrapeTargetUnavailable` indicates Prometheus cannot scrape the Worker metrics endpoint. Check container status, health server listener, and network connectivity.
+
 ## Readiness
 
-`FiarComponentNotReady` means a database, authentication, or connector readiness gauge has remained zero for five minutes. Check `/health/ready`, then inspect the named component. Re-run the one-shot migration job for a schema mismatch; validate mounted secret files and OIDC discovery for authentication failures.
+- `FiarGatewayReadinessSeriesMissing` / `FiarWorkerReadinessSeriesMissing`: the readiness metric series is entirely absent from the scrape, indicating scrape payload corruption or early process initialization failure.
+- `FiarDatabaseNotReady`: the database readiness probe reports unavailable for either Gateway or Worker. Verify PostgreSQL connectivity, pool health, and schema migration state.
+- `FiarAuthenticationNotReady`: Gateway authentication readiness reports unavailable. Verify OIDC discovery reachability, valid JWKS with usable signing keys, and session/secret file accessibility.
+- `FiarComponentNotReady`: a generic component readiness gauge (database, authentication, or connector) has remained zero for five minutes. Check `/health/ready`, then inspect the named component.
+
 
 ## Authentication
 

@@ -220,4 +220,98 @@ test('generic OIDC client verifies discovery, PKCE, JWKS, nonce, mapping, and cr
   } finally { await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
+test('OIDC readiness verifies valid discovery, reachable JWKS, key compatibility, HTTPS, and recovers from transient errors', async () => {
+  const { publicKey } = await generateKeyPair('RS256');
+  const jwk = await exportJWK(publicKey); Object.assign(jwk, { kid: 'test-key', alg: 'RS256', use: 'sig' });
+  const ecKey = (await exportJWK((await generateKeyPair('ES256')).publicKey)); Object.assign(ecKey, { kid: 'ec-key', alg: 'ES256', use: 'sig' });
+
+  let discoveryStatus = 200;
+  let discoveryPayload: unknown = null;
+  let jwksStatus = 200;
+  let jwksPayload: unknown = null;
+
+  const server = createServer(async (request, response) => {
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    if (request.url === '/.well-known/openid-configuration') {
+      if (discoveryStatus !== 200) { response.statusCode = discoveryStatus; return response.end(); }
+      const payload = discoveryPayload ?? { issuer: base, authorization_endpoint: `${base}/authorize`, token_endpoint: `${base}/token`, jwks_uri: `${base}/jwks`, code_challenge_methods_supported: ['S256'] };
+      if (typeof payload === 'string') { response.setHeader('content-type', 'application/json'); return response.end(payload); }
+      return json(response, payload);
+    }
+    if (request.url === '/jwks') {
+      if (jwksStatus !== 200) { response.statusCode = jwksStatus; return response.end(); }
+      const payload = jwksPayload ?? { keys: [jwk] };
+      if (typeof payload === 'string') { response.setHeader('content-type', 'application/json'); return response.end(payload); }
+      return json(response, payload);
+    }
+    response.statusCode = 404; response.end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  try {
+    const issuer = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const makeClient = (overrides: Partial<ConstructorParameters<typeof OidcClient>[0]['config']> = {}) => new OidcClient({
+      config: { issuer, clientId: 'fiar-client', audience: 'fiar-client', redirectUri: `${issuer}/callback`, dashboardUri: issuer, allowedAlgorithms: ['RS256'], clockSkewSeconds: 30, ...overrides },
+      pool: context.pool, stateEncryptionKey: 'state-key', sessionPepper: 'session-pepper', clientSecret: null, sessionIdleSeconds: 1800, sessionAbsoluteSeconds: 28800,
+    });
+
+    // 1. Valid discovery and JWKS -> checkReady returns true
+    const client = makeClient();
+    assert.equal(await client.checkReady(true), true);
+    assert.equal(client.isReady(), true);
+
+    // 2. Unreachable discovery -> fails
+    discoveryStatus = 503;
+    assert.equal(await client.checkReady(true), false);
+    assert.equal(client.isReady(), false);
+    discoveryStatus = 200;
+
+    // 3. Unreachable JWKS -> fails
+    jwksStatus = 503;
+    assert.equal(await client.checkReady(true), false);
+    assert.equal(client.isReady(), false);
+    jwksStatus = 200;
+
+    // 4. Malformed JWKS -> fails
+    jwksPayload = 'not valid json{';
+    assert.equal(await client.checkReady(true), false);
+    jwksPayload = null;
+
+    // 5. Empty JWKS -> fails
+    jwksPayload = { keys: [] };
+    assert.equal(await client.checkReady(true), false);
+    jwksPayload = null;
+
+    // 6. No key compatible with allowed algorithms (only ES256 key when RS256 allowed) -> fails
+    jwksPayload = { keys: [ecKey] };
+    assert.equal(await client.checkReady(true), false);
+    jwksPayload = null;
+
+    // 7. Issuer mismatch -> fails
+    discoveryPayload = { issuer: 'http://mismatched-issuer.example', authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, jwks_uri: `${issuer}/jwks`, code_challenge_methods_supported: ['S256'] };
+    assert.equal(await client.checkReady(true), false);
+    discoveryPayload = null;
+
+    // 8. Insecure endpoints in production (https issuer with http endpoints) -> fails
+    const httpsClient = new OidcClient({
+      config: { issuer: 'https://secure-idp.example', clientId: 'fiar-client', audience: 'fiar-client', redirectUri: 'https://secure-idp.example/callback', dashboardUri: 'https://secure-idp.example', allowedAlgorithms: ['RS256'], clockSkewSeconds: 30 },
+      pool: context.pool, stateEncryptionKey: 'state-key', sessionPepper: 'session-pepper', clientSecret: null, sessionIdleSeconds: 1800, sessionAbsoluteSeconds: 28800,
+      fetchImplementation: async (url) => {
+        if (String(url).endsWith('.well-known/openid-configuration')) {
+          return { ok: true, json: async () => ({ issuer: 'https://secure-idp.example', authorization_endpoint: 'http://insecure.example/authorize', token_endpoint: 'https://secure-idp.example/token', jwks_uri: 'https://secure-idp.example/jwks', code_challenge_methods_supported: ['S256'] }) } as Response;
+        }
+        return { ok: true, json: async () => ({ keys: [jwk] }) } as Response;
+      },
+    });
+    assert.equal(await httpsClient.checkReady(true), false);
+
+    // 9. Recovery after temporary failure -> succeeds
+    assert.equal(await client.checkReady(true), true);
+    assert.equal(client.isReady(), true);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
 function json(response: import('node:http').ServerResponse, value: unknown): void { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify(value)); }
+

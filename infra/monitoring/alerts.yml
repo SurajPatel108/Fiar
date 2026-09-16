@@ -1,6 +1,55 @@
 groups:
   - name: fiar-phase6
     rules:
+      - alert: FiarGatewayScrapeTargetUnavailable
+        expr: up{job=~".*gateway.*"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar Gateway scrape target is unavailable"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#scrape-targets"
+      - alert: FiarWorkerScrapeTargetUnavailable
+        expr: up{job=~".*worker.*"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar Worker scrape target is unavailable"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#scrape-targets"
+      - alert: FiarGatewayReadinessSeriesMissing
+        expr: absent(fiar_readiness{service="GATEWAY"}) == 1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar Gateway readiness metric series is missing"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#readiness"
+      - alert: FiarWorkerReadinessSeriesMissing
+        expr: absent(fiar_readiness{service="WORKER"}) == 1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar Worker readiness metric series is missing"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#readiness"
+      - alert: FiarDatabaseNotReady
+        expr: fiar_readiness{component="DATABASE"} == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar database readiness reports unavailable"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#readiness"
+      - alert: FiarAuthenticationNotReady
+        expr: fiar_readiness{service="GATEWAY",component="AUTHENTICATION"} == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar Gateway authentication readiness reports unavailable"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#authentication"
+      - alert: FiarConnectorNotReady
+        expr: fiar_readiness{service="WORKER",component="CONNECTOR"} == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar fake-provider connector is not ready"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#connector"
       - alert: FiarComponentNotReady
         expr: fiar_readiness == 0
         for: 5m
@@ -43,10 +92,4 @@ groups:
         annotations:
           summary: "Fiar worker retries or failures are elevated"
           runbook_url: "docs/OPERATIONS_RUNBOOK.md#worker"
-      - alert: FiarConnectorNotReady
-        expr: fiar_readiness{service="WORKER",component="CONNECTOR"} == 0
-        for: 5m
-        labels: { severity: critical }
-        annotations:
-          summary: "Fiar fake-provider connector is not ready"
-          runbook_url: "docs/OPERATIONS_RUNBOOK.md#connector"
+

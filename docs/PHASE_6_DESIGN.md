@@ -62,4 +62,5 @@ Phase 6 does not implement a real provider, external fact connector, policy/admi
 
 ## Acceptance commands
 
-`npm run verify` passes 15 unit/security/policy tests, 46 gateway integration tests, 8 operator CLI tests, 8 dedicated shutdown tests, 20 worker tests (including worker shutdown coverage), 7 SDK tests, 3 dashboard component/API tests, and 20 Playwright browser/OIDC tests. `npm run verify:alerts` validates seven rules with Prometheus 2.55.1. `npm run verify:containers` builds non-root production images and exercises an isolated production runtime with temporary file secrets and local fake OIDC. The CI workflow runs these gates plus the guarded isolated backup/restore verification.
+`npm run verify` passes 15 unit/security/policy tests, 47 gateway integration tests, 8 operator CLI tests, 11 dedicated shutdown tests, 21 worker tests (including worker shutdown coverage), 7 SDK tests, 3 dashboard component/API tests, and 20 Playwright browser/OIDC tests. `npm run verify:alerts` validates 13 rules with Prometheus 2.55.1. `npm run verify:containers` builds non-root production images and exercises an isolated production runtime with temporary file secrets, functional local fake OIDC, session-based manager endpoints, and agent access denial. The CI workflow runs these gates plus the guarded isolated backup/restore verification.
+

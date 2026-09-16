@@ -54,7 +54,59 @@ async function main(): Promise<void> {
   }
 }
 
-function createHealthServer(pool: ReturnType<typeof createDatabasePool>, metrics: OperationalMetrics, metricsSecret: string | null): Server {
+import { fileURLToPath } from 'node:url';
+
+export interface WorkerServiceOptions {
+  pool: ReturnType<typeof createDatabasePool>;
+  metrics?: OperationalMetrics;
+  metricsSecret?: string | null;
+  config?: Partial<ReturnType<typeof loadWorkerConfig>>;
+  worker?: ExecutionWorker;
+}
+
+export function createWorkerService(options: WorkerServiceOptions) {
+  const metrics = options.metrics ?? new OperationalMetrics('WORKER');
+  const worker = options.worker ?? new ExecutionWorker(
+    options.pool,
+    new FakeRefundProvider(options.pool, {
+      onIdempotencyPrevention: () => metrics.increment('idempotency_preventions_total', { layer: 'PROVIDER' }),
+    }),
+    {
+      workerId: options.config?.workerId ?? 'test-worker',
+      leaseSeconds: options.config?.leaseSeconds ?? 30,
+      maxAttempts: options.config?.maxAttempts ?? 3,
+    },
+  );
+  const healthServer = createHealthServer(options.pool, metrics, options.metricsSecret ?? null);
+  const runtime = new WorkerRuntime({
+    processOne: () => worker.processOne(),
+    reconcileOne: () => worker.reconcileOne(),
+    wait: (shouldStop) => wait(options.config?.pollIntervalMs ?? 100, shouldStop),
+    closeHealth: async () => {
+      await new Promise<void>((resolve, reject) => healthServer.close((err) => err ? reject(err) : resolve()));
+    },
+    closeDatabase: () => closeDatabasePool(options.pool),
+    onExecution: (execution) => recordExecutionMetrics(metrics, execution),
+    onReconciliation: (reconciliation) => recordReconciliationMetrics(metrics, reconciliation),
+  });
+  return { worker, healthServer, runtime, metrics, pool: options.pool };
+}
+
+export function createWorkerLifecycle(
+  runtime: WorkerRuntime,
+  options: { timeoutMs?: number; onTimeout?: () => void; unbind?: () => void } = {},
+): GracefulShutdown {
+  return new GracefulShutdown({
+    timeoutMs: options.timeoutMs ?? 10_000,
+    close: async () => {
+      await runtime.requestStop();
+      options.unbind?.();
+    },
+    onTimeout: options.onTimeout ?? (() => operationalLog('error', { event: 'worker.shutdown_timeout', service: 'worker', reason: 'IN_FLIGHT_LEASE_LEFT_FOR_RECONCILIATION' })),
+  });
+}
+
+export function createHealthServer(pool: ReturnType<typeof createDatabasePool>, metrics: OperationalMetrics, metricsSecret: string | null): Server {
   return createServer(async (request, response) => {
     response.setHeader('content-type', 'application/json'); response.setHeader('x-content-type-options', 'nosniff');
     if (request.url === '/health/live') { response.statusCode = 200; response.end(JSON.stringify({ status: 'live' })); return; }
@@ -75,7 +127,12 @@ function createHealthServer(pool: ReturnType<typeof createDatabasePool>, metrics
     response.statusCode = 404; response.end(JSON.stringify({ error: 'NOT_FOUND' }));
   });
 }
-async function wait(milliseconds: number, shouldStop: () => boolean): Promise<void> {
+
+export async function wait(milliseconds: number, shouldStop: () => boolean): Promise<void> {
   const interval = 100; for (let elapsed = 0; elapsed < milliseconds && !shouldStop(); elapsed += interval) await new Promise((resolve) => setTimeout(resolve, Math.min(interval, milliseconds - elapsed)));
 }
-main().catch(() => { operationalLog('error', { event: 'worker.start_failed', service: 'worker', reason: 'STARTUP_OR_RUNTIME_FAILURE' }); process.exitCode = 1; });
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch(() => { operationalLog('error', { event: 'worker.start_failed', service: 'worker', reason: 'STARTUP_OR_RUNTIME_FAILURE' }); process.exitCode = 1; });
+}
+
