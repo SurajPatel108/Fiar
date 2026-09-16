@@ -9,6 +9,7 @@ import { hmacSha256, randomToken } from '../../../packages/shared/src/secure-val
 import { buildGatewayApp } from '../src/app';
 import { createDatabasePool } from '../src/db';
 import { OidcClient } from '../src/oidc';
+import { OperationalMetrics } from '../src/metrics';
 import { createGatewayTestContext, type GatewayTestContext } from './integration-support';
 
 let context: GatewayTestContext;
@@ -19,11 +20,13 @@ test('production rejects development headers and authenticates an HMAC-protected
   const id = createId('wcr'); const secret = randomToken(32); const pepper = 'test-workload-pepper';
   await context.pool.query(`insert into workload_credentials (id, tenant_id, principal_id, credential_type, verifier, status, expires_at) values ($1, 'ten_demo_alpha', 'prn_demo_alpha_agent', 'agent', $2, 'active', now() + interval '1 day')`, [id, hmacSha256(secret, pepper)]);
   const pool = createDatabasePool(context.databaseUrl);
-  const app = await buildGatewayApp({ pool, devCredentials: new Map([['alpha-agent', 'prn_demo_alpha_agent']]), approvalExpiryHours: 12, runtimeMode: 'production', credentialPepper: pepper, sessionPepper: 'session', csrfSecret: 'csrf', metricsSecret: 'metrics' });
+  const metrics = new OperationalMetrics();
+  const app = await buildGatewayApp({ pool, devCredentials: new Map([['alpha-agent', 'prn_demo_alpha_agent']]), approvalExpiryHours: 12, runtimeMode: 'production', credentialPepper: pepper, sessionPepper: 'session', csrfSecret: 'csrf', metricsSecret: 'metrics', metrics });
   try {
     assert.equal((await app.inject({ method: 'GET', url: '/v1/actions', headers: { 'x-fiar-dev-credential': 'alpha-agent' } })).statusCode, 401);
     const response = await app.inject({ method: 'GET', url: '/v1/actions', headers: { authorization: `Bearer fiar_${id}_${secret}` } });
     assert.equal(response.statusCode, 200);
+    assert.match(await metrics.render(context.pool), /fiar_authentication_successes_total\{channel="WORKLOAD"\} 1/);
     const stored = await context.pool.query<{ verifier: string }>(`select verifier from workload_credentials where id = $1`, [id]);
     assert.equal(stored.rows[0]?.verifier.includes(secret), false);
     await context.pool.query(`update workload_credentials set status = 'revoked', revoked_at = now() where id = $1`, [id]);
@@ -83,11 +86,13 @@ test('server-managed session requires bound CSRF and revokes on logout', async (
   const id = createId('ses'); const secret = randomToken(32); const pepper = 'session-pepper';
   await context.pool.query(`insert into human_sessions (id, tenant_id, principal_id, token_verifier, status, absolute_expires_at, idle_expires_at) values ($1, 'ten_demo_alpha', 'prn_demo_alpha_manager', $2, 'active', now() + interval '8 hours', now() + interval '30 minutes')`, [id, hmacSha256(secret, pepper)]);
   const pool = createDatabasePool(context.databaseUrl);
-  const app = await buildGatewayApp({ pool, devCredentials: new Map(), approvalExpiryHours: 12, runtimeMode: 'production', credentialPepper: 'credential', sessionPepper: pepper, csrfSecret: 'csrf-key', metricsSecret: 'metrics', publicOrigin: 'https://fiar.example', allowedHost: 'fiar.example' });
+  const metrics = new OperationalMetrics();
+  const app = await buildGatewayApp({ pool, devCredentials: new Map(), approvalExpiryHours: 12, runtimeMode: 'production', credentialPepper: 'credential', sessionPepper: pepper, csrfSecret: 'csrf-key', metricsSecret: 'metrics', publicOrigin: 'https://fiar.example', allowedHost: 'fiar.example', metrics });
   try {
     const cookie = `__Host-fiar_session=fiar_session_${id}_${secret}`;
     const session = await app.inject({ method: 'GET', url: '/v1/auth/session', headers: { cookie } });
     assert.equal(session.statusCode, 200);
+    assert.match(await metrics.render(context.pool), /fiar_authentication_successes_total\{channel="SESSION"\} 1/);
     const csrfToken = (session.json() as { csrfToken: string }).csrfToken;
     assert.equal((await app.inject({ method: 'POST', url: '/v1/auth/logout', headers: { cookie } })).statusCode, 403);
     assert.equal((await app.inject({ method: 'POST', url: '/v1/auth/logout', headers: { cookie, origin: 'https://evil.example', host: 'fiar.example', 'x-fiar-csrf-token': csrfToken } })).statusCode, 403);
@@ -191,25 +196,27 @@ test('generic OIDC client verifies discovery, PKCE, JWKS, nonce, mapping, and cr
     await context.pool.query(`insert into human_identity_mappings (id, issuer, subject, tenant_id, principal_id, status) values ($1, $2, 'manager-subject', 'ten_demo_alpha', 'prn_demo_alpha_manager', 'active')`, [createId('him'), issuer]);
     const client = new OidcClient({ config: { issuer, clientId: 'fiar-client', audience: 'fiar-client', redirectUri: `${issuer}/callback`, dashboardUri: issuer, allowedAlgorithms: ['RS256'], clockSkewSeconds: 30 }, pool: context.pool, stateEncryptionKey: 'state-key', sessionPepper: 'session-pepper', clientSecret: null, sessionIdleSeconds: 1800, sessionAbsoluteSeconds: 28800 });
     await client.initialize();
-    const authorization = new URL(await client.begin()); expectedNonce = authorization.searchParams.get('nonce') ?? '';
+    const authorizationStart = await client.begin(); const authorization = new URL(authorizationStart.authorizationUrl); expectedNonce = authorization.searchParams.get('nonce') ?? '';
     assert.equal(authorization.searchParams.get('redirect_uri'), `${issuer}/callback`);
     assert.equal(authorization.searchParams.get('code_challenge_method'), 'S256');
-    const result = await client.callback('valid-code', authorization.searchParams.get('state') ?? '');
+    const result = await client.callback('valid-code', authorization.searchParams.get('state') ?? '', authorizationStart.browserBinding);
     assert.match(result.cookieToken, /^fiar_session_ses_/);
     assert.equal((await context.pool.query(`select count(*)::int as count from human_sessions where tenant_id = 'ten_demo_alpha' and status = 'active'`)).rows[0]?.count, 1);
-    await assert.rejects(client.callback('valid-code', authorization.searchParams.get('state') ?? ''), /invalid/);
-    const wrongNonce = new URL(await client.begin()); expectedNonce = 'not-the-issued-nonce';
-    await assert.rejects(client.callback('valid-code', wrongNonce.searchParams.get('state') ?? ''), /identity token is invalid/);
+    await assert.rejects(client.callback('valid-code', authorization.searchParams.get('state') ?? '', authorizationStart.browserBinding), /invalid/);
+    const wrongNonceStart = await client.begin(); const wrongNonce = new URL(wrongNonceStart.authorizationUrl); expectedNonce = 'not-the-issued-nonce';
+    await assert.rejects(client.callback('valid-code', wrongNonce.searchParams.get('state') ?? '', wrongNonceStart.browserBinding), /identity token is invalid/);
     for (const mode of ['issuer', 'audience', 'algorithm', 'signature', 'expired'] as const) {
-      const invalid = new URL(await client.begin()); expectedNonce = invalid.searchParams.get('nonce') ?? ''; tokenMode = mode;
-      await assert.rejects(client.callback('valid-code', invalid.searchParams.get('state') ?? ''));
+      const invalidStart = await client.begin(); const invalid = new URL(invalidStart.authorizationUrl); expectedNonce = invalid.searchParams.get('nonce') ?? ''; tokenMode = mode;
+      await assert.rejects(client.callback('valid-code', invalid.searchParams.get('state') ?? '', invalidStart.browserBinding));
     }
     tokenMode = 'valid';
-    const stateAttempt = new URL(await client.begin()); expectedNonce = stateAttempt.searchParams.get('nonce') ?? '';
-    await assert.rejects(client.callback('valid-code', `${stateAttempt.searchParams.get('state') ?? ''}changed`), /invalid/);
+    const stateStart = await client.begin(); const stateAttempt = new URL(stateStart.authorizationUrl); expectedNonce = stateAttempt.searchParams.get('nonce') ?? '';
+    await assert.rejects(client.callback('valid-code', `${stateAttempt.searchParams.get('state') ?? ''}changed`, stateStart.browserBinding), /invalid/);
+    const browserBound = await client.begin(); const browserBoundUrl = new URL(browserBound.authorizationUrl);
+    await assert.rejects(client.callback('valid-code', browserBoundUrl.searchParams.get('state') ?? '', randomToken(32)), /invalid/);
     await context.pool.query(`update human_identity_mappings set status = 'revoked', revoked_at = now() where issuer = $1`, [issuer]);
-    const unknown = new URL(await client.begin()); expectedNonce = unknown.searchParams.get('nonce') ?? '';
-    await assert.rejects(client.callback('valid-code', unknown.searchParams.get('state') ?? ''), /not authorized/);
+    const unknownStart = await client.begin(); const unknown = new URL(unknownStart.authorizationUrl); expectedNonce = unknown.searchParams.get('nonce') ?? '';
+    await assert.rejects(client.callback('valid-code', unknown.searchParams.get('state') ?? '', unknownStart.browserBinding), /not authorized/);
   } finally { await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 

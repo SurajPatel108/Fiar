@@ -74,6 +74,8 @@ apps/
       styles.css
     test/
       api.test.ts
+      e2e.spec.ts
+      e2e-server.ts
 packages/
   sdk/
     README.md
@@ -91,6 +93,7 @@ packages/
       ids.ts
       audit-redaction.ts
       operational-log.ts
+      graceful-shutdown.ts
       policy-types.ts
       runtime.ts
       schema.ts
@@ -109,12 +112,14 @@ db/
     0004_approval_decisions.sql
     0005_worker_execution.sql
     0006_phase6_identity_and_operations.sql
+    0007_phase6_acceptance.sql
   seeds/
     local-dev.sql
 infra/
   compose/
     docker-compose.yml
     docker-compose.development.yml
+    docker-compose.production-smoke.yml
     .env.example
     .env.development.example
     secrets/*.example
@@ -122,16 +127,24 @@ infra/
     Dockerfile.gateway
     Dockerfile.worker
     Dockerfile.dashboard
+    Dockerfile.fake-oidc
     nginx-dashboard.conf
   scripts/
     backup.sh
     restore-verify.sh
     check-repository-hygiene.mjs
     check-markdown-links.mjs
+    verify-alerts.sh
+    verify-production-containers.sh
+  monitoring/
+    alerts.yml
+  testing/
+    fake-oidc.mjs
   sql/
     backup-check.sql
     health-check.sql
 .github/workflows/verify.yml
+playwright.config.ts
 .dockerignore
 ```
 
@@ -145,7 +158,7 @@ infra/
 | `apps/worker/` | Safe claiming, authorization rechecks, reservations, deterministic fake provider, reconciliation, health/metrics, and bounded shutdown | 4, 6 |
 | `packages/sdk/` | Typed transport client with development/custom headers and production workload bearer support | 5–6 |
 | `apps/dashboard/` | Development memory-only credential mode and production OIDC/session/CSRF manager review | 5–6 |
-| `infra/` and `.github/` | Non-root images, Compose, migration/recovery checks, hygiene, and CI | 6 |
+| `infra/` and `.github/` | Non-root images, development and isolated production Compose, alert rules, migration/recovery checks, hygiene, and CI | 6 |
 | `docs/PRODUCT_VISION_AND_AUTHORIZATION_FLOW.md` | Target product experience, trusted-fact model, onboarding concept, and post-MVP direction | Roadmap |
 
 ## Proposed Phase 7–10 components

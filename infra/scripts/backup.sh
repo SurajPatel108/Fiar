@@ -10,5 +10,13 @@ case "$FIAR_BACKUP_FILE" in
 esac
 
 umask 077
-pg_dump --dbname="$FIAR_DATABASE_URL" --format=custom --no-owner --no-acl --file="$FIAR_BACKUP_FILE"
+if command -v pg_dump >/dev/null 2>&1; then
+  pg_dump --dbname="$FIAR_DATABASE_URL" --format=custom --no-owner --no-acl --file="$FIAR_BACKUP_FILE"
+elif [ -n "${FIAR_PG_TOOLS_CONTAINER:-}" ]; then
+  case "$FIAR_PG_TOOLS_CONTAINER" in *[!A-Za-z0-9_.-]*) echo "FIAR_PG_TOOLS_CONTAINER is invalid" >&2; exit 2 ;; esac
+  docker exec "$FIAR_PG_TOOLS_CONTAINER" pg_dump --dbname="$FIAR_DATABASE_URL" --format=custom --no-owner --no-acl > "$FIAR_BACKUP_FILE"
+else
+  echo "pg_dump is unavailable; install PostgreSQL 16 client tools or set FIAR_PG_TOOLS_CONTAINER" >&2
+  exit 2
+fi
 echo "Backup created at the requested path"

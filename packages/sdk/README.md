@@ -27,3 +27,5 @@ console.log(action.actionId, action.status, action.approvalId);
 Applications with another authentication scheme can supply `headers` or an asynchronous `getCredentialHeaders` callback instead. Never put credentials in source code.
 
 `workloadCredential` sends `Authorization: Bearer …` and is the production agent/service option. The older `credential` plus optional `credentialHeader` behavior remains available for the explicit development adapter. The two options are mutually exclusive, and the SDK never stores, logs, validates, or authorizes either credential locally.
+
+Phase 6 verification exercises workload-bearer use in both the SDK suite and the production-mode container smoke. Manager browser sessions remain a dashboard concern and are intentionally never exposed as SDK credential material.

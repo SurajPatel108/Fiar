@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import type { PoolClient } from 'pg';
 import { createId } from '../../../packages/shared/src/ids';
 import { parseRuntimeMode } from '../../../packages/shared/src/runtime';
@@ -7,10 +8,20 @@ import { hmacSha256, randomToken } from '../../../packages/shared/src/secure-val
 import { createDatabasePool, withTransaction } from './db';
 import { insertSecurityAuditEvent } from './security-audit';
 
-const args = parseArgs(process.argv.slice(2));
-const command = process.argv[2];
+export const OPERATOR_USAGE = `Usage:
+  credential-create --tenant ID --principal ID [--expires-days 1-365]
+  credential-rotate --credential ID [--expires-days 1-365]
+  credential-revoke --credential ID
+  identity-map --issuer URL --subject SUBJECT --tenant ID --principal ID
+  session-revoke --session ID`;
 
 async function main(): Promise<void> {
+  const values = process.argv.slice(2);
+  const command = values[0];
+  if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
+    process.stdout.write(`${OPERATOR_USAGE}\n`);
+    return;
+  }
   const mode = parseRuntimeMode(process.env.FIAR_RUNTIME_MODE);
   const provider = mode === 'production'
     ? new FileSecretProvider({
@@ -25,16 +36,38 @@ async function main(): Promise<void> {
   const pepper = await provider.get('credential_pepper', ['credential-create', 'credential-rotate'].includes(command ?? ''));
   const pool = createDatabasePool(databaseUrl);
   try {
-    if (command === 'credential-create') process.stdout.write(`${await createCredential(pool, required('tenant'), required('principal'), expiry(), pepper!)}\n`);
-    else if (command === 'credential-rotate') process.stdout.write(`${await rotateCredential(pool, required('credential'), expiry(), pepper!)}\n`);
-    else if (command === 'credential-revoke') await revokeCredential(pool, required('credential'));
-    else if (command === 'identity-map') await mapIdentity(pool, required('issuer'), required('subject'), required('tenant'), required('principal'));
-    else if (command === 'session-revoke') await revokeSession(pool, required('session'));
-    else throw new Error('Unknown operator command');
+    await runOperatorCommand(pool, pepper, values, (value) => process.stdout.write(`${value}\n`));
   } finally { await pool.end(); }
 }
 
-async function createCredential(pool: ReturnType<typeof createDatabasePool>, tenantId: string, principalId: string, expiresAt: Date, pepper: string): Promise<string> {
+export async function runOperatorCommand(
+  pool: ReturnType<typeof createDatabasePool>,
+  pepper: string | null,
+  values: string[],
+  write: (value: string) => void = () => undefined,
+): Promise<void> {
+  const command = values[0];
+  if (command === undefined || command === 'help' || command === '--help' || command === '-h') { write(OPERATOR_USAGE); return; }
+  const args = parseArgs(values);
+  const allowed = COMMAND_ARGUMENTS[command];
+  if (!allowed) throw new Error('Unknown operator command');
+  if ([...args.keys()].some((key) => !allowed.has(key))) throw new Error('Unknown operator argument');
+  if (command === 'credential-create') { if (!pepper) throw new Error('Credential pepper is required'); write(await createCredential(pool, required(args, 'tenant'), required(args, 'principal'), expiry(args), pepper)); }
+  else if (command === 'credential-rotate') { if (!pepper) throw new Error('Credential pepper is required'); write(await rotateCredential(pool, required(args, 'credential'), expiry(args), pepper)); }
+  else if (command === 'credential-revoke') await revokeCredential(pool, required(args, 'credential'));
+  else if (command === 'identity-map') await mapIdentity(pool, required(args, 'issuer'), required(args, 'subject'), required(args, 'tenant'), required(args, 'principal'));
+  else if (command === 'session-revoke') await revokeSession(pool, required(args, 'session'));
+}
+
+const COMMAND_ARGUMENTS: Readonly<Record<string, ReadonlySet<string>>> = {
+  'credential-create': new Set(['tenant', 'principal', 'expires-days']),
+  'credential-rotate': new Set(['credential', 'expires-days']),
+  'credential-revoke': new Set(['credential']),
+  'identity-map': new Set(['issuer', 'subject', 'tenant', 'principal']),
+  'session-revoke': new Set(['session']),
+};
+
+export async function createCredential(pool: ReturnType<typeof createDatabasePool>, tenantId: string, principalId: string, expiresAt: Date, pepper: string): Promise<string> {
   return withTransaction(pool, async (client) => createCredentialInTransaction(client, tenantId, principalId, expiresAt, pepper));
 }
 async function createCredentialInTransaction(client: PoolClient, tenantId: string, principalId: string, expiresAt: Date, pepper: string): Promise<string> {
@@ -50,7 +83,7 @@ async function createCredentialInTransaction(client: PoolClient, tenantId: strin
   await insertSecurityAuditEvent(client, { tenantId, principalId, eventType: 'credential.created', outcome: 'CREATED', reason: 'OPERATOR_BOOTSTRAP', correlationId: randomUUID(), payload: { principalType: row.type } });
   return `fiar_${id}_${secret}`;
 }
-async function rotateCredential(pool: ReturnType<typeof createDatabasePool>, credentialId: string, expiresAt: Date, pepper: string): Promise<string> {
+export async function rotateCredential(pool: ReturnType<typeof createDatabasePool>, credentialId: string, expiresAt: Date, pepper: string): Promise<string> {
   return withTransaction(pool, async (client) => {
     const current = await client.query<{ tenant_id: string; principal_id: string; status: string }>(`select tenant_id, principal_id, status from workload_credentials where id = $1 for update`, [credentialId]);
     const row = current.rows[0];
@@ -62,12 +95,14 @@ async function rotateCredential(pool: ReturnType<typeof createDatabasePool>, cre
     return token;
   });
 }
-async function revokeCredential(pool: ReturnType<typeof createDatabasePool>, id: string): Promise<void> {
-  const result = await pool.query<{ tenant_id: string; principal_id: string }>(`update workload_credentials set status = 'revoked', revoked_at = now(), updated_at = now() where id = $1 and status = 'active' returning tenant_id, principal_id`, [id]);
-  const row = result.rows[0]; if (!row) throw new Error('Credential is not active');
-  await insertSecurityAuditEvent(pool, { tenantId: row.tenant_id, principalId: row.principal_id, eventType: 'credential.revoked', outcome: 'REVOKED', reason: 'OPERATOR_REVOCATION', correlationId: randomUUID() });
+export async function revokeCredential(pool: ReturnType<typeof createDatabasePool>, id: string): Promise<void> {
+  await withTransaction(pool, async (client) => {
+    const result = await client.query<{ tenant_id: string; principal_id: string }>(`update workload_credentials set status = 'revoked', revoked_at = now(), updated_at = now() where id = $1 and status = 'active' returning tenant_id, principal_id`, [id]);
+    const row = result.rows[0]; if (!row) throw new Error('Credential is not active');
+    await insertSecurityAuditEvent(client, { tenantId: row.tenant_id, principalId: row.principal_id, eventType: 'credential.revoked', outcome: 'REVOKED', reason: 'OPERATOR_REVOCATION', correlationId: randomUUID() });
+  });
 }
-async function mapIdentity(pool: ReturnType<typeof createDatabasePool>, issuer: string, subject: string, tenantId: string, principalId: string): Promise<void> {
+export async function mapIdentity(pool: ReturnType<typeof createDatabasePool>, issuer: string, subject: string, tenantId: string, principalId: string): Promise<void> {
   const url = new URL(issuer); if (!['http:', 'https:'].includes(url.protocol) || !subject || subject.length > 512) throw new Error('Identity mapping input is invalid');
   await withTransaction(pool, async (client) => {
     const result = await client.query<{ type: string; status: string; tenant_status: string }>(`select p.type, p.status, t.status as tenant_status from principals p join tenants t on t.id = p.tenant_id where p.id = $1 and p.tenant_id = $2`, [principalId, tenantId]);
@@ -77,19 +112,21 @@ async function mapIdentity(pool: ReturnType<typeof createDatabasePool>, issuer: 
     await insertSecurityAuditEvent(client, { tenantId, principalId, eventType: 'identity.mapped', outcome: 'CREATED', reason: 'OPERATOR_MAPPING', correlationId: randomUUID(), payload: { mappingId, principalType: row.type } });
   });
 }
-async function revokeSession(pool: ReturnType<typeof createDatabasePool>, id: string): Promise<void> {
+export async function revokeSession(pool: ReturnType<typeof createDatabasePool>, id: string): Promise<void> {
   await withTransaction(pool, async (client) => {
     const result = await client.query<{ tenant_id: string; principal_id: string }>(`update human_sessions set status = 'revoked', revoked_at = now(), updated_at = now() where id = $1 and status = 'active' returning tenant_id, principal_id`, [id]);
     const row = result.rows[0]; if (!row) throw new Error('Session is not active');
     await insertSecurityAuditEvent(client, { tenantId: row.tenant_id, principalId: row.principal_id, eventType: 'session.revoked', outcome: 'REVOKED', reason: 'OPERATOR_REVOCATION', correlationId: randomUUID() });
   });
 }
-function parseArgs(values: string[]): Map<string, string> {
+export function parseArgs(values: string[]): Map<string, string> {
   const output = new Map<string, string>();
-  for (let index = 1; index < values.length; index += 2) { const key = values[index]; const value = values[index + 1]; if (!key?.startsWith('--') || !value) throw new Error('Operator arguments must use --name value'); output.set(key.slice(2), value); }
+  for (let index = 1; index < values.length; index += 2) { const key = values[index]; const value = values[index + 1]; if (!key?.startsWith('--') || !value || output.has(key.slice(2))) throw new Error('Operator arguments must use unique --name value pairs'); output.set(key.slice(2), value); }
   return output;
 }
-function required(name: string): string { const value = args.get(name); if (!value) throw new Error(`--${name} is required`); return value; }
-function expiry(): Date { const days = Number(args.get('expires-days') ?? '90'); if (!Number.isSafeInteger(days) || days < 1 || days > 365) throw new Error('--expires-days must be between 1 and 365'); return new Date(Date.now() + days * 86_400_000); }
+function required(args: Map<string, string>, name: string): string { const value = args.get(name); if (!value) throw new Error(`--${name} is required`); return value; }
+function expiry(args: Map<string, string>): Date { const days = Number(args.get('expires-days') ?? '90'); if (!Number.isSafeInteger(days) || days < 1 || days > 365) throw new Error('--expires-days must be between 1 and 365'); return new Date(Date.now() + days * 86_400_000); }
 
-main().catch(() => { console.error('Operator command failed'); process.exitCode = 1; });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch(() => { console.error('Operator command failed'); process.exitCode = 1; });
+}

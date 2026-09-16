@@ -1,6 +1,6 @@
 # Agent Authorization Firewall
 
-This repository contains the completed and verified Phase 1–5 refund firewall plus the locally verified Phase 6 identity and operational hardening layer. Pilot activation still requires a real OIDC client registration and operator-installed deployment secrets.
+This repository contains the completed and verified Phase 1–6 refund firewall. All repository-controlled Phase 6 acceptance checks pass; pilot activation still requires a real OIDC client registration, an exact HTTPS callback origin, and operator-installed deployment secrets.
 
 The implemented backend is a constrained authorization firewall for AI agents: a TypeScript/Fastify/PostgreSQL system that decides whether an agent action may execute, requires human approval for selected actions, and then dispatches work through a background worker with durable state and auditability. The paper’s narrow starting point is the refund workflow, and this plan keeps that as the first implementation slice.
 
@@ -87,6 +87,8 @@ FIAR_DATABASE_URL='postgresql://…/fiar' FIAR_BACKUP_FILE=/absolute/path/fiar.b
 FIAR_ADMIN_DATABASE_URL='postgresql://…/postgres' FIAR_BACKUP_FILE=/absolute/path/fiar.backup infra/scripts/restore-verify.sh
 ```
 
+The recovery scripts use local PostgreSQL client tools when installed. In container-only environments, set `FIAR_PG_TOOLS_CONTAINER` to the exact PostgreSQL 16 container ID/name; CI uses its isolated service container this way.
+
 Applications can submit actions through the transport-only TypeScript client in `packages/sdk`; see [packages/sdk/README.md](packages/sdk/README.md). After creating an approval-required action, inspect and decide it in the dashboard. The equivalent raw HTTP decision remains:
 
 ```sh
@@ -105,7 +107,16 @@ docker exec fiar-postgres psql -U fiar -d fiar -c \
 
 The switch prevents new provider calls. A call that crossed the connector boundary before the switch committed is still finalized or reconciled from its durable attempt; Fiar does not discard or guess its outcome.
 
-Run `npm run verify` to execute strict typechecking, Phase 1 regressions, the Phase 2–3 gateway integration suite, the Phase 4 worker suite, SDK and dashboard behavior tests, and the dashboard typecheck/production build. Integration tests create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
+Run `npm run verify` for the complete deterministic non-container suite: strict typechecking, unit/security tests, PostgreSQL gateway/CLI/worker suites, shutdown tests, SDK/dashboard checks, the production dashboard build, real-browser fake-OIDC tests, link checking, and repository hygiene. Integration and browser harnesses create unique temporary databases and drop only those databases; they do not reset the seeded `fiar` database or delete Docker volumes.
+
+The remaining operational gates are explicit:
+
+```sh
+npm run verify:alerts       # pinned promtool validation (Docker fallback)
+npm run verify:containers   # unique production-mode Compose project and fake OIDC
+```
+
+The production smoke generates temporary mounted secrets, applies migrations, proves production rejects development authentication, creates a hashed workload credential, executes one fake-provider action, checks health/readiness/metrics, verifies non-root images, and removes only its uniquely named stack and volume. Alert meanings and first actions are in [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md).
 
 The SDK and dashboard remain clients only: policy, identity, tenant scope, approval binding, execution, and reconciliation are server-side. A real payment provider, external fact connectors, policy administration, webhooks, and broader workflows remain deferred. The fake connector cannot execute a real refund.
 

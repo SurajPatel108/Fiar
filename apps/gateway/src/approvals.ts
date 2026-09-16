@@ -283,10 +283,10 @@ export async function decideApproval(
       input.expectedPolicyVersion !== row.policy_version_id ||
       input.expectedPolicyVersion !== row.action_policy_version_id
     ) {
-      throw new DomainError('CONFLICT', 'Approval binding does not match the requested action');
+      throw new DomainError('CONFLICT', 'Approval binding does not match the requested action', { approvalConflict: 'BINDING' });
     }
     if (row.status !== 'pending' || row.action_status !== 'awaiting_approval') {
-      throw new DomainError('CONFLICT', 'Approval has already been resolved');
+      throw new DomainError('CONFLICT', 'Approval has already been resolved', { approvalConflict: 'RESOLVED' });
     }
 
     const staleReason = getStaleReason(row);
@@ -370,7 +370,11 @@ export async function decideApproval(
   });
 
   if ('expired' in result) {
-    throw new DomainError('CONFLICT', `Approval is no longer usable: ${result.expired.resolutionReason ?? 'EXPIRED'}`);
+    const reason = result.expired.resolutionReason ?? 'EXPIRED';
+    throw new DomainError('CONFLICT', `Approval is no longer usable: ${reason}`, {
+      approvalConflict: 'STALE',
+      approvalOutcome: reason === 'APPROVAL_EXPIRED' ? 'EXPIRED' : 'STALE',
+    });
   }
   return result.decided;
 }

@@ -1,0 +1,7 @@
+FROM node:22-alpine
+WORKDIR /app
+COPY --chown=node:node infra/testing/fake-oidc.mjs ./server.mjs
+USER node
+EXPOSE 4443
+HEALTHCHECK --interval=3s --timeout=2s --retries=20 CMD node -e "fetch('https://fake-oidc:4443/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["node", "server.mjs"]

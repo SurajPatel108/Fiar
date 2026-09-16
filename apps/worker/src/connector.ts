@@ -40,6 +40,7 @@ export type FakeProviderBehavior =
 export interface FakeRefundProviderOptions {
   behavior?: FakeProviderBehavior;
   behaviorForRequest?: (request: RefundProviderRequest) => FakeProviderBehavior;
+  onIdempotencyPrevention?: () => void;
 }
 
 interface ProviderLedgerRow {
@@ -59,6 +60,7 @@ export class FakeRefundProvider implements RefundProviderConnector {
   async executeRefund(request: RefundProviderRequest): Promise<ProviderExecutionResult> {
     const existing = await this.findLedgerEntry(request.providerIdempotencyKey);
     if (existing) {
+      this.options.onIdempotencyPrevention?.();
       return executionResultFromLedger(existing);
     }
 
@@ -108,6 +110,7 @@ export class FakeRefundProvider implements RefundProviderConnector {
         errorClassification,
       ],
     );
+    if (!inserted.rows[0]) this.options.onIdempotencyPrevention?.();
     const row = inserted.rows[0] ?? await this.requireLedgerEntry(request.providerIdempotencyKey);
 
     if (behavior === 'ambiguous_success' || behavior === 'ambiguous_unknown') {

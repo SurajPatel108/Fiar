@@ -1,0 +1,52 @@
+groups:
+  - name: fiar-phase6
+    rules:
+      - alert: FiarComponentNotReady
+        expr: fiar_readiness == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar {{ $labels.service }} component {{ $labels.component }} is not ready"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#readiness"
+      - alert: FiarAuthenticationFailureSpike
+        expr: sum(rate(fiar_authentication_failures_total[5m])) by (service, channel, category) > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Fiar authentication failures are elevated"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#authentication"
+      - alert: FiarApprovalExpiryOrConflictSpike
+        expr: sum(rate(fiar_approval_outcomes_total{outcome=~"EXPIRED|STALE"}[10m])) + sum(rate(fiar_approval_conflicts_total[10m])) > 0.2
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Fiar approvals are expiring or conflicting unusually often"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#approvals"
+      - alert: FiarQueueBacklog
+        expr: fiar_queue_depth > 100 or fiar_oldest_queued_age_seconds > 300
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Fiar execution queue is backed up"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#queue"
+      - alert: FiarReconciliationBacklog
+        expr: fiar_pending_reconciliation > 20 or fiar_oldest_reconciliation_age_seconds > 900
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar reconciliation backlog requires attention"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#reconciliation"
+      - alert: FiarWorkerFailureSpike
+        expr: sum(rate(fiar_worker_failures_total[5m])) + sum(rate(fiar_worker_retries_total[5m])) > 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Fiar worker retries or failures are elevated"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#worker"
+      - alert: FiarConnectorNotReady
+        expr: fiar_readiness{service="WORKER",component="CONNECTOR"} == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Fiar fake-provider connector is not ready"
+          runbook_url: "docs/OPERATIONS_RUNBOOK.md#connector"

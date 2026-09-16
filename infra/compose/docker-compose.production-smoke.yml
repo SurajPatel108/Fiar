@@ -1,0 +1,31 @@
+services:
+  fake-oidc:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.fake-oidc
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/tls/cert.pem
+    volumes:
+      - ${FIAR_SMOKE_TLS_DIR:?FIAR_SMOKE_TLS_DIR is required}:/run/tls:ro
+    networks: [fiar-egress]
+    read_only: true
+    tmpfs: [/tmp]
+    restart: "no"
+
+  gateway:
+    environment:
+      FIAR_PUBLIC_ORIGIN: https://127.0.0.1:${FIAR_DASHBOARD_PORT:-48080}
+      FIAR_ALLOWED_HOST: 127.0.0.1:${FIAR_DASHBOARD_PORT:-48080}
+      FIAR_OIDC_ISSUER: https://fake-oidc:4443
+      FIAR_OIDC_CLIENT_ID: fiar-smoke
+      FIAR_OIDC_AUDIENCE: fiar-smoke
+      FIAR_OIDC_REDIRECT_URI: https://127.0.0.1:${FIAR_DASHBOARD_PORT:-48080}/v1/auth/oidc/callback
+      NODE_EXTRA_CA_CERTS: /run/tls/ca.pem
+    volumes:
+      - ${FIAR_SMOKE_TLS_DIR:?FIAR_SMOKE_TLS_DIR is required}/cert.pem:/run/tls/ca.pem:ro
+    depends_on:
+      fake-oidc: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    networks: [fiar-internal, fiar-published]

@@ -6,6 +6,7 @@ import { OidcClient } from './oidc';
 import { EnvironmentSecretProvider, FileSecretProvider, type SecretProvider } from '../../../packages/shared/src/secrets';
 import { operationalLog } from '../../../packages/shared/src/operational-log';
 import { parseRuntimeMode } from '../../../packages/shared/src/runtime';
+import { bindShutdownSignals, GracefulShutdown } from '../../../packages/shared/src/graceful-shutdown';
 
 async function main(): Promise<void> {
   const mode = parseRuntimeMode(process.env.FIAR_RUNTIME_MODE);
@@ -67,16 +68,13 @@ function secretProvider(mode: 'development' | 'test' | 'production'): SecretProv
 }
 
 function installShutdown(app: Awaited<ReturnType<typeof buildGatewayApp>>): void {
-  let closing = false;
-  const close = () => {
-    if (closing) return;
-    closing = true;
-    const timeout = setTimeout(() => { operationalLog('error', { event: 'gateway.shutdown_timeout', service: 'gateway', reason: 'TIMEOUT' }); process.exit(1); }, 10_000);
-    timeout.unref();
-    void app.close().finally(() => clearTimeout(timeout));
-  };
-  process.once('SIGTERM', close);
-  process.once('SIGINT', close);
+  let unbind: () => void = () => undefined;
+  const lifecycle = new GracefulShutdown({
+    timeoutMs: 10_000,
+    close: async () => { await app.close(); unbind(); },
+    onTimeout: () => operationalLog('error', { event: 'gateway.shutdown_timeout', service: 'gateway', reason: 'TIMEOUT' }),
+  });
+  unbind = bindShutdownSignals(process, () => lifecycle.shutdown(), () => { process.exit(1); });
 }
 
 main().catch(() => {

@@ -31,3 +31,4 @@ The dashboard must be served from the configured same origin through the supplie
 3. Select the pending approval and verify its action, business context, request hash, policy version, and expiry.
 4. Choose approve or reject, optionally add a comment, and confirm in the dialog.
 5. Verify the success state and that the item leaves the pending queue. Approval only queues controlled worker work; it does not claim immediate provider execution.
+The production manager flow is covered by `npm run test:e2e`. It builds this dashboard and drives it in Chromium through the real gateway and a deterministic local OIDC issuer; no frontend API mocking or external identity account is used.

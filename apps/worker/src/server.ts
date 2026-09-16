@@ -8,6 +8,9 @@ import { parseRuntimeMode } from '../../../packages/shared/src/runtime';
 import { FakeRefundProvider } from './connector';
 import { loadWorkerConfig } from './config';
 import { ExecutionWorker } from './worker';
+import { WorkerRuntime } from './runtime';
+import { recordExecutionMetrics, recordReconciliationMetrics } from './worker-metrics';
+import { bindShutdownSignals, GracefulShutdown } from '../../../packages/shared/src/graceful-shutdown';
 
 async function main(): Promise<void> {
   const mode = parseRuntimeMode(process.env.FIAR_RUNTIME_MODE);
@@ -19,40 +22,35 @@ async function main(): Promise<void> {
   const metricsSecret = await secretProvider.get('metrics_token', config.runtimeMode === 'production');
   const pool = createDatabasePool(config.databaseUrl);
   let healthServer: Server | undefined;
-  let stopping = false;
   try {
     if (config.autoMigrate) await applySchema(pool); else await assertRequiredMigrations(pool);
-    const worker = new ExecutionWorker(pool, new FakeRefundProvider(pool), { workerId: config.workerId, leaseSeconds: config.leaseSeconds, maxAttempts: config.maxAttempts });
-    const metrics = new OperationalMetrics();
+    const metrics = new OperationalMetrics('WORKER');
+    const worker = new ExecutionWorker(pool, new FakeRefundProvider(pool, {
+      onIdempotencyPrevention: () => metrics.increment('idempotency_preventions_total', { layer: 'PROVIDER' }),
+    }), { workerId: config.workerId, leaseSeconds: config.leaseSeconds, maxAttempts: config.maxAttempts });
     healthServer = createHealthServer(pool, metrics, metricsSecret);
     await new Promise<void>((resolve, reject) => { healthServer!.once('error', reject); healthServer!.listen(config.healthPort, config.healthHost, resolve); });
-    let shutdownTimer: NodeJS.Timeout | undefined;
-    const stop = () => {
-      if (stopping) return;
-      stopping = true;
-      shutdownTimer = setTimeout(() => {
-        operationalLog('error', { event: 'worker.shutdown_timeout', service: 'worker', reason: 'IN_FLIGHT_LEASE_LEFT_FOR_RECONCILIATION' });
-        process.exit(1);
-      }, 10_000);
-      shutdownTimer.unref();
-    };
-    process.once('SIGTERM', stop); process.once('SIGINT', stop);
+    const runtime = new WorkerRuntime({
+      processOne: () => worker.processOne(),
+      reconcileOne: () => worker.reconcileOne(),
+      wait: (shouldStop) => wait(config.pollIntervalMs, shouldStop),
+      closeHealth: async () => { if (healthServer) await new Promise<void>((resolve, reject) => healthServer!.close((error) => error ? reject(error) : resolve())); },
+      closeDatabase: () => closeDatabasePool(pool),
+      onExecution: (execution) => recordExecutionMetrics(metrics, execution),
+      onReconciliation: (reconciliation) => recordReconciliationMetrics(metrics, reconciliation),
+    });
+    let unbind: () => void = () => undefined;
+    const lifecycle = new GracefulShutdown({
+      timeoutMs: 10_000,
+      close: () => runtime.requestStop(),
+      onTimeout: () => operationalLog('error', { event: 'worker.shutdown_timeout', service: 'worker', reason: 'IN_FLIGHT_LEASE_LEFT_FOR_RECONCILIATION' }),
+    });
+    unbind = bindShutdownSignals(process, () => lifecycle.shutdown().finally(unbind), () => { process.exit(1); });
     operationalLog('info', { event: 'worker.started', service: 'worker', runtimeMode: config.runtimeMode, workerId: config.workerId });
-    while (!stopping) {
-      const execution = await worker.processOne();
-      metrics.increment('worker_claims_total', { result: execution.kind.toUpperCase() });
-      if ('outcome' in execution && execution.outcome) metrics.increment('execution_outcomes_total', { outcome: execution.outcome });
-      if (execution.kind === 'blocked' && execution.reason === 'KILL_SWITCH_ENABLED') metrics.increment('kill_switch_blocks_total');
-      if (execution.kind === 'executed' && execution.outcome === 'RETRYABLE_FAILURE') metrics.increment('worker_retries_total', { reason: 'PRE_PROVIDER' });
-      if (stopping) break;
-      const reconciliation = await worker.reconcileOne();
-      if (reconciliation.kind === 'resolved') metrics.increment('reconciliation_outcomes_total', { outcome: reconciliation.outcome.toUpperCase() });
-      if (execution.kind === 'none' && reconciliation.kind === 'none') await wait(config.pollIntervalMs, () => stopping);
-    }
-    if (shutdownTimer) clearTimeout(shutdownTimer);
+    await runtime.run();
   } finally {
-    if (healthServer) await new Promise<void>((resolve) => healthServer!.close(() => resolve()));
-    await closeDatabasePool(pool);
+    // WorkerRuntime owns resources after construction. Startup failures land here.
+    if (!healthServer) await closeDatabasePool(pool);
   }
 }
 
@@ -62,11 +60,16 @@ function createHealthServer(pool: ReturnType<typeof createDatabasePool>, metrics
     if (request.url === '/health/live') { response.statusCode = 200; response.end(JSON.stringify({ status: 'live' })); return; }
     if (request.url === '/health/ready') {
       const ready = await checkDatabaseReady(pool); response.statusCode = ready ? 200 : 503;
+      metrics.setReadiness('WORKER', 'DATABASE', ready);
+      metrics.setReadiness('WORKER', 'CONNECTOR', true);
       response.end(JSON.stringify({ status: ready ? 'ready' : 'not_ready', components: { database: ready ? 'ready' : 'unavailable', connector: 'ready' } })); return;
     }
     if (request.url === '/metrics') {
       const authorization = request.headers.authorization ?? ''; const supplied = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
       if (!metricsSecret || !timingSafeHexEqual(sha256(supplied), sha256(metricsSecret))) { response.statusCode = 401; response.end(JSON.stringify({ error: 'UNAUTHORIZED' })); return; }
+      const ready = await checkDatabaseReady(pool);
+      metrics.setReadiness('WORKER', 'DATABASE', ready);
+      metrics.setReadiness('WORKER', 'CONNECTOR', true);
       response.statusCode = 200; response.setHeader('content-type', 'text/plain; version=0.0.4'); response.end(await metrics.render(pool)); return;
     }
     response.statusCode = 404; response.end(JSON.stringify({ error: 'NOT_FOUND' }));

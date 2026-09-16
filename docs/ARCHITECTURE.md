@@ -146,7 +146,7 @@ The implementation should be layered in this order:
 
 ## Phase 6 identity and operations
 
-Production workload requests use opaque bearer credentials whose secrets are never stored. Managers/admins authenticate through provider-neutral OIDC Authorization Code + PKCE and receive PostgreSQL-backed opaque sessions. Development credentials are structurally excluded from production. Session-bound CSRF, same-origin validation, mounted secrets, centralized audit allowlists, liveness/readiness, protected metrics, non-root images, recovery checks, and bounded shutdown complete the local Phase 6 boundary. See [PHASE_6_DESIGN.md](PHASE_6_DESIGN.md).
+Production workload requests use opaque bearer credentials whose secrets are never stored. Managers/admins authenticate through provider-neutral OIDC Authorization Code + PKCE and receive PostgreSQL-backed opaque sessions; one-use state is additionally bound to the initiating browser. Development credentials are structurally excluded from production. Session-bound CSRF, same-origin validation, mounted secrets, centralized audit allowlists, liveness/readiness, bounded metrics and alerts, non-root images, recovery checks, production-mode smoke coverage, and deterministic graceful shutdown complete the repository-controlled Phase 6 boundary. See [PHASE_6_DESIGN.md](PHASE_6_DESIGN.md).
 
 The production dashboard and gateway are same-origin through the packaged Nginx proxy. Gateway OIDC traffic has controlled egress; PostgreSQL and the fake-provider worker remain internal. Only the dashboard port is published in the pilot topology.
 

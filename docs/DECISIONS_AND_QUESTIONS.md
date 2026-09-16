@@ -133,6 +133,8 @@ Tradeoff:
 7. The deterministic PostgreSQL fake connector is permitted in the production runtime profile solely for a no-money controlled pilot.
 8. Production processes verify schema state; a one-shot migration job applies forward migrations.
 9. A selected/registered external OIDC client, exact HTTPS origin, and installed deployment secrets are blockers to pilot activation, not blockers to locally verifying the provider-neutral implementation.
+10. OIDC state is single-use and bound to an `HttpOnly` browser-flow cookie; callback parameters never select a post-login destination.
+11. Phase 6 acceptance uses a deterministic local OIDC issuer and a unique production-mode Compose project. Neither mechanism adds a production identity provider or payment connector.
 
 ## Questions that block later phases
 

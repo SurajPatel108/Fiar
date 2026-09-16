@@ -86,7 +86,7 @@ async function authenticateWorkload(pool: Pool, authorization: string, pepper: s
   if (row.status !== 'active') throw unauthorized('REVOKED');
   if (new Date(row.expires_at).getTime() <= Date.now()) throw unauthorized('EXPIRED');
   if (!['agent', 'service'].includes(row.principal_type) || row.principal_status !== 'active' || row.tenant_status !== 'active') throw new DomainError('FORBIDDEN', 'Credential is not authorized');
-  void pool.query(`update workload_credentials set last_used_at = now(), updated_at = now() where id = $1 and (last_used_at is null or last_used_at < now() - interval '5 minutes')`, [row.id]).catch(() => undefined);
+  await pool.query(`update workload_credentials set last_used_at = now(), updated_at = now() where id = $1 and (last_used_at is null or last_used_at < now() - interval '5 minutes')`, [row.id]);
   return principal(row, 'workload');
 }
 

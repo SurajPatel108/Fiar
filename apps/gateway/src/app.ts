@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 
-import { authenticateRequest, requirePermission, type AuthenticatedPrincipal, type DevCredentialDirectory } from './auth';
+import { authenticateRequest, readCookie, requirePermission, type AuthenticatedPrincipal, type DevCredentialDirectory } from './auth';
 import { createAction, getActionById, listActions } from './actions';
 import {
   decideApproval,
@@ -155,21 +155,24 @@ export async function buildGatewayApp(options: GatewayAppOptions): Promise<Fasti
     const key = authenticationBucket(request);
     failureLimiter.check(key);
     try {
-      return await authenticateRequest(request, options.pool, {
+      const principal = await authenticateRequest(request, options.pool, {
         runtimeMode,
         devCredentials: options.devCredentials,
         ...(options.credentialPepper ? { credentialPepper: options.credentialPepper } : {}),
         ...(options.sessionPepper ? { sessionPepper: options.sessionPepper } : {}),
         ...(options.sessionIdleSeconds ? { sessionIdleSeconds: options.sessionIdleSeconds } : {}),
       });
+      metrics.increment('authentication_successes_total', { channel: principal.authenticationKind?.toUpperCase() ?? 'REQUEST' });
+      return principal;
     } catch (error) {
       if (error instanceof DomainError && error.code === 'UNAUTHORIZED') {
         const category = authenticationFailureCategory(error.details?.authenticationCategory);
         failureLimiter.fail(key);
-        metrics.increment('authentication_failures_total', { category, channel: 'REQUEST' });
+        const channel = authenticationChannel(request);
+        metrics.increment('authentication_failures_total', { category, channel });
         void insertSecurityAuditEvent(options.pool, {
           eventType: 'authentication.failed', outcome: 'DENIED', reason: `${category}_AUTHENTICATION`,
-          correlationId: request.id, payload: { channel: 'REQUEST', category },
+          correlationId: request.id, payload: { channel, category },
         }).catch(() => undefined);
       }
       throw error;
@@ -197,6 +200,8 @@ export async function buildGatewayApp(options: GatewayAppOptions): Promise<Fasti
   app.get('/health/ready', async (_request, reply) => {
     const database = await checkDatabaseReady(options.pool);
     const authentication = runtimeMode !== 'production' || (options.oidcClient ? await options.oidcClient.checkReady() : false);
+    metrics.setReadiness('GATEWAY', 'DATABASE', database);
+    metrics.setReadiness('GATEWAY', 'AUTHENTICATION', authentication);
     const ready = database && authentication;
     reply.code(ready ? 200 : 503).send({ status: ready ? 'ready' : 'not_ready', components: { database: database ? 'ready' : 'unavailable', authentication: authentication ? 'ready' : 'unavailable' } });
   });
@@ -208,25 +213,35 @@ export async function buildGatewayApp(options: GatewayAppOptions): Promise<Fasti
       reply.code(401).send({ error: 'UNAUTHORIZED', message: 'Authentication required' });
       return;
     }
+    const database = await checkDatabaseReady(options.pool);
+    const authentication = runtimeMode !== 'production' || (options.oidcClient ? await options.oidcClient.checkReady() : false);
+    metrics.setReadiness('GATEWAY', 'DATABASE', database);
+    metrics.setReadiness('GATEWAY', 'AUTHENTICATION', authentication);
     reply.type('text/plain; version=0.0.4').send(await metrics.render(options.pool));
   });
 
   app.get('/v1/auth/oidc/start', async (_request, reply) => {
     if (!options.oidcClient || !(await options.oidcClient.checkReady())) { reply.code(503).send({ error: 'UNAVAILABLE', message: 'Authentication unavailable' }); return; }
-    reply.redirect(await options.oidcClient.begin());
+    const start = await options.oidcClient.begin();
+    reply.header('set-cookie', oidcFlowCookie(start.browserBinding, runtimeMode === 'production'));
+    reply.redirect(start.authorizationUrl);
   });
 
   app.get('/v1/auth/oidc/callback', async (request, reply) => {
     const query = request.query as Record<string, unknown>;
     if (typeof query.code !== 'string' || typeof query.state !== 'string') { reply.code(400).send({ error: 'INVALID_REQUEST', message: 'Invalid authentication callback' }); return; }
     try {
-      const session = await options.oidcClient?.callback(query.code, query.state);
+      const browserBinding = readCookie(typeof request.headers.cookie === 'string' ? request.headers.cookie : null, '__Host-fiar_oidc_flow');
+      if (!browserBinding) throw new Error('OIDC browser binding is missing');
+      const session = await options.oidcClient?.callback(query.code, query.state, browserBinding);
       if (!session) throw new Error('OIDC unavailable');
-      reply.header('set-cookie', sessionCookie(session.cookieToken, session.expiresAt, runtimeMode === 'production'));
+      reply.header('set-cookie', [sessionCookie(session.cookieToken, session.expiresAt, runtimeMode === 'production'), clearOidcFlowCookie(runtimeMode === 'production')]);
+      metrics.increment('oidc_authentication_total', { outcome: 'SUCCEEDED' });
       reply.redirect(publicOrigin);
     } catch {
+      metrics.increment('oidc_authentication_total', { outcome: 'DENIED' });
       void insertSecurityAuditEvent(options.pool, { eventType: 'oidc.failed', outcome: 'DENIED', reason: 'OIDC_VALIDATION_FAILED', correlationId: request.id }).catch(() => undefined);
-      reply.code(401).send({ error: 'UNAUTHORIZED', message: 'Authentication failed' });
+      reply.header('set-cookie', clearOidcFlowCookie(runtimeMode === 'production')).code(401).send({ error: 'UNAUTHORIZED', message: 'Authentication failed' });
     }
   });
 
@@ -320,7 +335,11 @@ export async function buildGatewayApp(options: GatewayAppOptions): Promise<Fasti
           { testFailAfterDecisionPersist: options.testHooks?.failAfterApprovalDecisionPersist ?? false },
         );
       } catch (error) {
-        if (error instanceof DomainError && error.code === 'CONFLICT') metrics.increment('approval_conflicts_total', { category: 'STALE_OR_RESOLVED' });
+        if (error instanceof DomainError && error.code === 'CONFLICT') {
+          const category = approvalConflictCategory(error.details?.approvalConflict);
+          metrics.increment('approval_conflicts_total', { category });
+          if (error.details?.approvalOutcome === 'EXPIRED' || error.details?.approvalOutcome === 'STALE') metrics.increment('approval_outcomes_total', { outcome: error.details.approvalOutcome });
+        }
         throw error;
       }
       metrics.increment('approval_outcomes_total', { outcome: approval.status.toUpperCase() });
@@ -347,6 +366,17 @@ export async function buildGatewayApp(options: GatewayAppOptions): Promise<Fasti
 
 function authenticationFailureCategory(value: unknown): 'INVALID' | 'MALFORMED' | 'EXPIRED' | 'REVOKED' {
   return value === 'MALFORMED' || value === 'EXPIRED' || value === 'REVOKED' ? value : 'INVALID';
+}
+
+function authenticationChannel(request: FastifyRequest): 'REQUEST' | 'DEVELOPMENT' | 'WORKLOAD' | 'SESSION' {
+  if (request.headers['x-fiar-dev-credential']) return 'DEVELOPMENT';
+  if (request.headers.authorization) return 'WORKLOAD';
+  if (request.headers.cookie) return 'SESSION';
+  return 'REQUEST';
+}
+
+function approvalConflictCategory(value: unknown): 'BINDING' | 'RESOLVED' | 'STALE' | 'OTHER' {
+  return value === 'BINDING' || value === 'RESOLVED' || value === 'STALE' ? value : 'OTHER';
 }
 
 function authenticationBucket(request: FastifyRequest): string {
@@ -377,4 +407,10 @@ function sessionCookie(token: string, expiresAt: Date, secure: boolean): string 
 }
 function clearSessionCookie(secure: boolean): string {
   return `__Host-fiar_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`;
+}
+function oidcFlowCookie(value: string, secure: boolean): string {
+  return `__Host-fiar_oidc_flow=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure ? '; Secure' : ''}`;
+}
+function clearOidcFlowCookie(secure: boolean): string {
+  return `__Host-fiar_oidc_flow=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`;
 }

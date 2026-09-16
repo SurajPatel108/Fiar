@@ -22,6 +22,11 @@ interface AttemptRow {
   pkce_verifier_tag: string;
 }
 
+export interface OidcAuthorizationStart {
+  authorizationUrl: string;
+  browserBinding: string;
+}
+
 export interface OidcClientOptions {
   config: OidcConfig;
   pool: Pool;
@@ -59,36 +64,37 @@ export class OidcClient {
     try { await this.initialize(); return true; } catch { return false; }
   }
 
-  async begin(): Promise<string> {
+  async begin(): Promise<OidcAuthorizationStart> {
     if (!this.discovery) throw new Error('OIDC authentication is not initialized');
     const id = createId('oid');
     const state = randomToken(32);
     const nonce = randomToken(32);
     const verifier = randomToken(32);
+    const browserBinding = randomToken(32);
     const challenge = Buffer.from(sha256Buffer(verifier)).toString('base64url');
     const encrypted = encryptValue(verifier, this.options.stateEncryptionKey);
     await this.options.pool.query(`
       insert into oidc_login_attempts (
         id, state_verifier, nonce_verifier, pkce_verifier_ciphertext,
-        pkce_verifier_iv, pkce_verifier_tag, expires_at
-      ) values ($1, $2, $3, $4, $5, $6, now() + interval '10 minutes')
-    `, [id, sha256(state), sha256(nonce), encrypted.ciphertext, encrypted.iv, encrypted.tag]);
+        pkce_verifier_iv, pkce_verifier_tag, browser_binding_verifier, expires_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, now() + interval '10 minutes')
+    `, [id, sha256(state), sha256(nonce), encrypted.ciphertext, encrypted.iv, encrypted.tag, sha256(browserBinding)]);
     const url = new URL(this.discovery.authorization_endpoint);
     url.search = new URLSearchParams({
       response_type: 'code', client_id: this.options.config.clientId,
       redirect_uri: this.options.config.redirectUri, scope: 'openid', state, nonce,
       code_challenge: challenge, code_challenge_method: 'S256',
     }).toString();
-    return url.toString();
+    return { authorizationUrl: url.toString(), browserBinding };
   }
 
-  async callback(code: string, state: string): Promise<{ cookieToken: string; expiresAt: Date }> {
-    if (!this.discovery || !this.jwks || code.length > 4096 || state.length > 256) throw new Error('OIDC callback is invalid');
+  async callback(code: string, state: string, browserBinding: string): Promise<{ cookieToken: string; expiresAt: Date }> {
+    if (!this.discovery || !this.jwks || code.length > 4096 || state.length > 256 || browserBinding.length > 256) throw new Error('OIDC callback is invalid');
     const consumed = await this.options.pool.query<AttemptRow>(`
       update oidc_login_attempts set consumed_at = now()
-      where state_verifier = $1 and consumed_at is null and expires_at > now()
+      where state_verifier = $1 and browser_binding_verifier = $2 and consumed_at is null and expires_at > now()
       returning nonce_verifier, pkce_verifier_ciphertext, pkce_verifier_iv, pkce_verifier_tag
-    `, [sha256(state)]);
+    `, [sha256(state), sha256(browserBinding)]);
     const attempt = consumed.rows[0];
     if (!attempt) throw new Error('OIDC callback is invalid');
     const verifier = decryptValue({ ciphertext: attempt.pkce_verifier_ciphertext, iv: attempt.pkce_verifier_iv, tag: attempt.pkce_verifier_tag }, this.options.stateEncryptionKey);

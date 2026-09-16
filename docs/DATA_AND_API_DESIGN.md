@@ -387,7 +387,7 @@ Approval locks the approval and action rows, rechecks active tenant/manager/requ
 
 ## Phase 6 authentication and operations API
 
-- `GET /v1/auth/oidc/start` creates one-use state/nonce/PKCE state and redirects to the configured OIDC authorization endpoint.
+- `GET /v1/auth/oidc/start` creates one-use state/nonce/PKCE state, binds it to a short-lived `HttpOnly` browser-flow cookie, and redirects to the configured OIDC authorization endpoint.
 - `GET /v1/auth/oidc/callback` consumes state, exchanges the code, verifies the signed ID token and existing human mapping, creates a server-side session, and redirects only to the configured dashboard URI.
 - `GET /v1/auth/session` authenticates the opaque cookie and returns only principal type plus a short-lived session-bound CSRF token.
 - `POST /v1/auth/logout` requires session, CSRF, Origin, and Host validation; it revokes the session and clears the cookie.

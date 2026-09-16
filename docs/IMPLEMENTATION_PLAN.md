@@ -381,7 +381,7 @@ Limitations:
 
 Goal: make the existing refund MVP deployable for a controlled internal pilot with production-grade identities, secret handling, health signals, recovery, and observability, without adding a real provider.
 
-Status: implemented and locally verified; pilot activation is blocked on selecting/registering a real OIDC client and installing deployment secrets. See [PHASE_6_DESIGN.md](PHASE_6_DESIGN.md).
+Status: complete and locally verified for every repository-controlled acceptance item. Pilot activation is separately blocked on selecting/registering a real OIDC client, fixing the deployment HTTPS origin, and installing independently generated secrets. See [PHASE_6_DESIGN.md](PHASE_6_DESIGN.md).
 
 Prerequisites:
 
@@ -436,8 +436,10 @@ Verification steps:
 
 Completed verification:
 
-- `npm run verify` passes 13 unit tests, 44 gateway integration tests, 13 worker tests, 7 SDK tests, 3 dashboard tests, strict TypeScript, and the production dashboard build (80 tests total, preserving the 65-test Phase 1–5 baseline).
-- The finalized images build reproducibly and run as non-root users; the isolated Compose stack passes migration, liveness/readiness, same-origin proxy, and security-header smoke checks.
+- `npm run verify` passes strict TypeScript, 15 unit/security/policy tests, 46 gateway integration tests, 8 operator CLI tests, 8 dedicated shutdown tests, 20 worker tests, 7 SDK tests, 3 dashboard tests, the production dashboard build, 20 real-browser fake-OIDC tests, hygiene, and Markdown-link checks.
+- `npm run verify:alerts` validates seven actionable alert rules with pinned Prometheus 2.55.1 tooling.
+- `npm run verify:containers` builds gateway, worker, dashboard, and local test-issuer images and runs a unique production-mode Compose stack through migration, file-secret loading, production auth rejection/success, fake-provider execution, readiness, metrics, non-root checks, and scoped teardown.
+- The browser suite verifies PKCE, one-use browser-bound state, nonce and callback failures, secure cookie attributes, CSRF, logout, idle refresh, expired/revoked sessions, manager role enforcement, empty browser storage, and malicious redirect parameters.
 - The guarded backup script restores into a random `fiar_restore_*` database, validates Phase 6 migrations and critical constraints, and removes only that temporary database.
 
 Limitations:

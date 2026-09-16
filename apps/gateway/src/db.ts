@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { Pool, type PoolClient } from 'pg';
 
 const ROOT_DIR = process.cwd();
-export const REQUIRED_MIGRATION = '0006_phase6_identity_and_operations.sql';
+export const REQUIRED_MIGRATION = '0007_phase6_acceptance.sql';
 
 export function createDatabasePool(databaseUrl: string): Pool {
   return new Pool({ connectionString: databaseUrl, max: 10 });
@@ -55,6 +55,7 @@ export async function applySchema(pool: Pool): Promise<void> {
       '0004_approval_decisions.sql',
       '0005_worker_execution.sql',
       '0006_phase6_identity_and_operations.sql',
+      '0007_phase6_acceptance.sql',
     ]) {
       if (applied.has(fileName)) {
         continue;
